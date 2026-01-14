@@ -1,0 +1,308 @@
+import React, { useState, useEffect } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { Dashboard } from './components/Dashboard';
+import { ConversationList } from './components/ConversationList';
+import { ChatWindow } from './components/ChatWindow';
+import { Settings } from './components/Settings';
+import { MOCK_CONVERSATIONS, DEFAULT_SUPABASE_CONFIG } from './constants';
+import { Conversation, ViewState, Message, SystemConfig } from './types';
+import { realtimeService } from './services/socket';
+
+// Chave para salvar no localStorage
+const STORAGE_KEY = 'autoforce_monitor_config';
+
+function App() {
+  const [currentView, setCurrentView] = useState<ViewState>('live-chat');
+  const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  
+  // Estado das configurações
+  const [config, setConfig] = useState<SystemConfig>({ supabaseUrl: '', supabaseKey: '' });
+  const [isConfigured, setIsConfigured] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // 1. Carregar configurações ao iniciar
+  useEffect(() => {
+    const initSystem = async (url: string, key: string) => {
+        setConfig({ supabaseUrl: url, supabaseKey: key });
+        setIsConfigured(true);
+        realtimeService.initialize(url, key);
+        
+        // Carrega Histórico
+        await loadHistory();
+    };
+
+    const savedConfig = localStorage.getItem(STORAGE_KEY);
+    
+    if (savedConfig) {
+      const parsed = JSON.parse(savedConfig);
+      if (parsed.supabaseUrl && parsed.supabaseKey) {
+        initSystem(parsed.supabaseUrl, parsed.supabaseKey);
+        return;
+      }
+    }
+
+    // Fallback para Config Padrão (Credenciais fornecidas)
+    if (DEFAULT_SUPABASE_CONFIG.supabaseUrl && DEFAULT_SUPABASE_CONFIG.supabaseKey) {
+        initSystem(DEFAULT_SUPABASE_CONFIG.supabaseUrl, DEFAULT_SUPABASE_CONFIG.supabaseKey);
+    } else {
+        setCurrentView('settings');
+    }
+  }, []);
+
+  // Função para carregar e processar histórico
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    const history = await realtimeService.fetchHistory();
+    
+    if (history && history.length > 0) {
+        const conversationsMap = new Map<string, Conversation>();
+
+        history.forEach(msg => {
+            const phone = msg.phone;
+            if (!phone) return;
+            const cleanPhone = phone.replace(/\D/g, '');
+
+            const appMsg: Message = {
+                id: msg.id,
+                text: msg.content || '',
+                senderId: msg.direction === 'outbound' ? 'agent' : 'customer',
+                timestamp: new Date(msg.created_at),
+                status: msg.status || 'delivered',
+                type: msg.type || 'text'
+            };
+
+            if (!conversationsMap.has(cleanPhone)) {
+                conversationsMap.set(cleanPhone, {
+                    id: phone, 
+                    contactName: `Lead ${phone.slice(-4)}`,
+                    contactPhone: phone,
+                    lastMessage: appMsg.text,
+                    lastMessageTime: appMsg.timestamp,
+                    unreadCount: 0,
+                    status: 'active',
+                    platform: 'whatsapp',
+                    tags: ['Histórico'],
+                    messages: []
+                });
+            }
+
+            const conv = conversationsMap.get(cleanPhone)!;
+            conv.messages.push(appMsg);
+            conv.lastMessage = appMsg.text;
+            conv.lastMessageTime = appMsg.timestamp;
+        });
+
+        const sortedConversations = Array.from(conversationsMap.values()).sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+        setConversations(sortedConversations);
+        if (sortedConversations.length > 0) {
+            setActiveConversationId(sortedConversations[0].id);
+        }
+    } else {
+        setConversations([]); 
+    }
+    setIsLoadingHistory(false);
+  };
+
+  // 2. Conectar ao Realtime quando estiver configurado
+  useEffect(() => {
+    if (!isConfigured) return;
+
+    // HANDLER 1: Novas Mensagens (INSERT)
+    const handleNewRealtimeMessage = (newMessage: Message, phone: string) => {
+      setConversations(prevConversations => {
+        const cleanPhone = phone.replace(/\D/g, '');
+        
+        const existingConvIndex = prevConversations.findIndex(c => 
+          c.contactPhone.replace(/\D/g, '') === cleanPhone
+        );
+
+        if (existingConvIndex >= 0) {
+          // --- Conversa Existente ---
+          const updated = [...prevConversations];
+          const targetConv = updated[existingConvIndex];
+
+          // Evita duplicatas
+          if (targetConv.messages.some(m => m.id === newMessage.id)) {
+            return prevConversations;
+          }
+
+          updated[existingConvIndex] = {
+            ...targetConv,
+            messages: [...targetConv.messages, newMessage],
+            lastMessage: newMessage.text,
+            lastMessageTime: newMessage.timestamp,
+            unreadCount: (targetConv.id === activeConversationId) ? 0 : targetConv.unreadCount + 1,
+            status: 'active' as const
+          };
+          
+          return updated.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+
+        } else {
+          // --- Nova Conversa ---
+          const newConvId = phone; 
+          
+          const newConversation: Conversation = {
+            id: newConvId,
+            contactName: `Novo Lead (${phone.slice(-4)})`, 
+            contactPhone: phone,
+            lastMessage: newMessage.text,
+            lastMessageTime: newMessage.timestamp,
+            unreadCount: 1,
+            status: 'active' as const,
+            platform: 'whatsapp',
+            tags: ['Novo'],
+            messages: [newMessage]
+          };
+
+          return [newConversation, ...prevConversations];
+        }
+      });
+    };
+
+    // HANDLER 2: Atualização de Mensagens (UPDATE - ex: status delivered/read)
+    const handleMessageUpdate = (updatedMessage: Message, phone: string) => {
+        setConversations(prevConversations => {
+            const cleanPhone = phone.replace(/\D/g, '');
+            
+            return prevConversations.map(conv => {
+                // Se for a conversa correta
+                if (conv.contactPhone.replace(/\D/g, '') === cleanPhone) {
+                    return {
+                        ...conv,
+                        messages: conv.messages.map(m => 
+                            // Substitui a mensagem antiga pela nova versão (com status atualizado)
+                            m.id === updatedMessage.id ? updatedMessage : m
+                        )
+                    };
+                }
+                return conv;
+            });
+        });
+    };
+
+    // Conecta os listeners
+    realtimeService.connect(handleNewRealtimeMessage, handleMessageUpdate);
+
+    return () => {
+      realtimeService.disconnect();
+    };
+  }, [isConfigured, activeConversationId]); 
+
+  const handleSaveConfig = (newConfig: SystemConfig) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
+    setConfig(newConfig);
+    setIsConfigured(true);
+    realtimeService.initialize(newConfig.supabaseUrl, newConfig.supabaseKey);
+    loadHistory(); // Recarrega com novas credenciais
+    setCurrentView('live-chat');
+  };
+
+  const handleSendMessage = async (text: string) => {
+    if (!activeConversationId) return;
+    const activeConv = conversations.find(c => c.id === activeConversationId);
+    if (!activeConv) return;
+
+    if (!isConfigured) {
+        alert("Configure o Supabase na aba Configurações primeiro.");
+        setCurrentView('settings');
+        return;
+    }
+
+    // Otimista
+    const tempId = 'temp-' + Date.now();
+    const optimisticMessage: Message = {
+      id: tempId,
+      text: text,
+      senderId: 'agent',
+      timestamp: new Date(),
+      status: 'sent',
+      type: 'text'
+    };
+
+    setConversations(prev => prev.map(conv => {
+      if (conv.id === activeConversationId) {
+        return {
+          ...conv,
+          messages: [...conv.messages, optimisticMessage],
+          lastMessage: text,
+          lastMessageTime: new Date()
+        };
+      }
+      return conv;
+    }));
+
+    try {
+        await realtimeService.sendMessage(text, activeConv.contactPhone);
+    } catch (error) {
+        console.error("Erro ao enviar:", error);
+        alert("Erro ao enviar mensagem. Verifique suas credenciais.");
+    }
+  };
+
+  const activeConversation = conversations.find(c => c.id === activeConversationId);
+
+  return (
+    <div className="flex h-screen bg-[#00020A] text-white font-sans overflow-hidden">
+      <Sidebar currentView={currentView} onChangeView={setCurrentView} />
+
+      <main className="flex-1 flex overflow-hidden">
+        {currentView === 'dashboard' && <Dashboard />}
+
+        {currentView === 'settings' && (
+            <div className="w-full">
+                <Settings config={config} onSave={handleSaveConfig} />
+            </div>
+        )}
+
+        {currentView === 'live-chat' && (
+          <div className="flex w-full h-full">
+            <ConversationList 
+              conversations={conversations} 
+              activeId={activeConversationId} 
+              onSelect={setActiveConversationId} 
+            />
+            <div className="flex-1 h-full">
+              {isLoadingHistory ? (
+                <div className="flex-1 h-full flex flex-col items-center justify-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-af-blue mb-4"></div>
+                    <p className="text-af-gray-200">Carregando histórico de mensagens...</p>
+                </div>
+              ) : activeConversation ? (
+                <ChatWindow 
+                  conversation={activeConversation} 
+                  onSendMessage={handleSendMessage} 
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-af-gray-300">
+                    <div className="w-20 h-20 rounded-full bg-af-blue/10 flex items-center justify-center mb-4">
+                        <svg className="w-10 h-10 text-af-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                    </div>
+                  <p className="text-xl font-heading font-bold text-white">Pronto para Atender</p>
+                  <p className="text-sm text-center max-w-md mt-2 text-af-gray-200">
+                      Conectado ao Supabase com sucesso. 
+                      <br/>
+                      {conversations.length === 0 
+                        ? "Nenhuma mensagem encontrada no histórico." 
+                        : "Selecione uma conversa ao lado para começar."}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(currentView === 'history' || currentView === 'analytics') && (
+           <div className="flex items-center justify-center w-full h-full flex-col">
+              <h2 className="text-3xl font-heading font-bold text-af-gray-300">Em Desenvolvimento</h2>
+              <p className="text-af-gray-300 mt-2">Este módulo estará disponível na próxima versão.</p>
+           </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
