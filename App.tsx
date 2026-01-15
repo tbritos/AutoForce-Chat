@@ -284,7 +284,8 @@ function App() {
       <Sidebar currentView={currentView} onChangeView={setCurrentView} />
 
       <main className="flex-1 flex overflow-hidden">
-        {currentView === 'dashboard' && <Dashboard />}
+        {/* Passando as conversas reais para o Dashboard */}
+        {currentView === 'dashboard' && <Dashboard conversations={conversations} />}
 
         {currentView === 'settings' && (
             <div className="w-full">
