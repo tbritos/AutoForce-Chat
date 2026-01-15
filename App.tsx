@@ -22,14 +22,20 @@ function App() {
   const [isConfigured, setIsConfigured] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // Helper para ordenar mensagens com alta precisão
+  // Helper para ordenar mensagens com alta precisão e desempate por ID
   const sortMessages = (msgs: Message[]) => {
       return msgs.sort((a, b) => {
-        // Usa timestamp numérico para precisão
+        // 1. Comparação por Timestamp (Numérico)
         const timeA = a.createdAtRaw ? new Date(a.createdAtRaw).getTime() : new Date(a.timestamp).getTime();
         const timeB = b.createdAtRaw ? new Date(b.createdAtRaw).getTime() : new Date(b.timestamp).getTime();
         
-        return timeA - timeB;
+        if (timeA !== timeB) {
+            return timeA - timeB;
+        }
+
+        // 2. Critério de Desempate: ID (Assumindo que IDs maiores = mensagens mais novas)
+        // O localeCompare com { numeric: true } trata strings como "10" e "2" corretamente (10 > 2)
+        return a.id.localeCompare(b.id, undefined, { numeric: true });
       });
   };
 
@@ -76,7 +82,7 @@ function App() {
             const cleanPhone = phone.replace(/\D/g, '');
 
             const appMsg: Message = {
-                id: msg.id,
+                id: msg.id ? String(msg.id) : `temp-${Date.now()}-${Math.random()}`, // Garante ID string
                 text: msg.content || '',
                 senderId: msg.direction === 'outbound' ? 'agent' : 'customer',
                 timestamp: new Date(msg.created_at),
@@ -116,8 +122,12 @@ function App() {
 
             const conv = conversationsMap.get(cleanPhone)!;
             conv.messages.push(appMsg);
-            conv.lastMessage = appMsg.text;
-            conv.lastMessageTime = appMsg.timestamp;
+            
+            // Atualiza lastMessage baseado no timestamp
+            if (appMsg.timestamp > conv.lastMessageTime) {
+                conv.lastMessage = appMsg.text;
+                conv.lastMessageTime = appMsg.timestamp;
+            }
         });
 
         // Ordena as mensagens dentro de cada conversa carregada (segurança extra)
@@ -166,8 +176,7 @@ function App() {
               newName = contactName;
           }
 
-          // Adiciona a nova mensagem e ORDENA por data para garantir a ordem correta
-          // mesmo que chegue com atraso via socket
+          // Adiciona a nova mensagem e ORDENA por data + ID
           const newMessagesList = sortMessages([...targetConv.messages, newMessage]);
 
           updated[existingConvIndex] = {
@@ -253,7 +262,7 @@ function App() {
         return;
     }
 
-    // Otimista
+    // Otimista (ID temporário muito alto para ficar no final até o real chegar)
     const now = new Date();
     const tempId = 'temp-' + Date.now();
     const optimisticMessage: Message = {
@@ -261,7 +270,7 @@ function App() {
       text: text,
       senderId: 'agent',
       timestamp: now,
-      createdAtRaw: now.toISOString(), // Garante que a mensagem otimista também tenha string
+      createdAtRaw: now.toISOString(),
       status: 'sent',
       type: 'text'
     };
