@@ -22,6 +22,11 @@ function App() {
   const [isConfigured, setIsConfigured] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
+  // Helper para ordenar mensagens cronologicamente
+  const sortMessages = (msgs: Message[]) => {
+      return msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  };
+
   // 1. Carregar configurações ao iniciar
   useEffect(() => {
     const initSystem = async (url: string, key: string) => {
@@ -108,6 +113,11 @@ function App() {
             conv.lastMessageTime = appMsg.timestamp;
         });
 
+        // Ordena as mensagens dentro de cada conversa carregada (segurança extra)
+        conversationsMap.forEach(conv => {
+            conv.messages = sortMessages(conv.messages);
+        });
+
         const sortedConversations = Array.from(conversationsMap.values()).sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
         setConversations(sortedConversations);
         if (sortedConversations.length > 0) {
@@ -149,10 +159,14 @@ function App() {
               newName = contactName;
           }
 
+          // Adiciona a nova mensagem e ORDENA por data para garantir a ordem correta
+          // mesmo que chegue com atraso via socket
+          const newMessagesList = sortMessages([...targetConv.messages, newMessage]);
+
           updated[existingConvIndex] = {
             ...targetConv,
             contactName: newName,
-            messages: [...targetConv.messages, newMessage],
+            messages: newMessagesList,
             lastMessage: newMessage.text,
             lastMessageTime: newMessage.timestamp,
             unreadCount: (targetConv.id === activeConversationId) ? 0 : targetConv.unreadCount + 1,
@@ -191,12 +205,12 @@ function App() {
             return prevConversations.map(conv => {
                 // Se for a conversa correta
                 if (conv.contactPhone.replace(/\D/g, '') === cleanPhone) {
+                    const updatedMsgs = conv.messages.map(m => 
+                        m.id === updatedMessage.id ? updatedMessage : m
+                    );
                     return {
                         ...conv,
-                        messages: conv.messages.map(m => 
-                            // Substitui a mensagem antiga pela nova versão (com status atualizado)
-                            m.id === updatedMessage.id ? updatedMessage : m
-                        )
+                        messages: sortMessages(updatedMsgs) // Mantém ordenado
                     };
                 }
                 return conv;
@@ -247,7 +261,7 @@ function App() {
       if (conv.id === activeConversationId) {
         return {
           ...conv,
-          messages: [...conv.messages, optimisticMessage],
+          messages: sortMessages([...conv.messages, optimisticMessage]), // Ordena também no envio otimista
           lastMessage: text,
           lastMessageTime: new Date()
         };
