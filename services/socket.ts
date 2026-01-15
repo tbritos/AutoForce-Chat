@@ -119,6 +119,7 @@ class RealtimeService {
         text: dbMsg.content || '',
         senderId: senderId,
         timestamp: new Date(dbMsg.created_at),
+        createdAtRaw: dbMsg.created_at, // Salva a string original
         status: dbMsg.status || 'delivered',
         type: dbMsg.type || 'text'
       };

@@ -11,6 +11,7 @@ export interface Message {
   text: string;
   senderId: string; // 'agent' or 'customer'
   timestamp: Date;
+  createdAtRaw?: string; // Data em string ISO para ordenação precisa (inclui microsegundos)
   status: 'sent' | 'delivered' | 'read';
   type: 'text' | 'image' | 'system';
 }

@@ -22,9 +22,16 @@ function App() {
   const [isConfigured, setIsConfigured] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // Helper para ordenar mensagens cronologicamente
+  // Helper para ordenar mensagens com alta precisão
   const sortMessages = (msgs: Message[]) => {
-      return msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      return msgs.sort((a, b) => {
+        // Tenta usar a comparação de strings ISO (preserva microssegundos do banco)
+        if (a.createdAtRaw && b.createdAtRaw) {
+            return a.createdAtRaw.localeCompare(b.createdAtRaw);
+        }
+        // Fallback para timestamp padrão se a string bruta não existir
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+      });
   };
 
   // 1. Carregar configurações ao iniciar
@@ -74,6 +81,7 @@ function App() {
                 text: msg.content || '',
                 senderId: msg.direction === 'outbound' ? 'agent' : 'customer',
                 timestamp: new Date(msg.created_at),
+                createdAtRaw: msg.created_at, // Importante: Salva o raw
                 status: msg.status || 'delivered',
                 type: msg.type || 'text'
             };
@@ -247,12 +255,14 @@ function App() {
     }
 
     // Otimista
+    const now = new Date();
     const tempId = 'temp-' + Date.now();
     const optimisticMessage: Message = {
       id: tempId,
       text: text,
       senderId: 'agent',
-      timestamp: new Date(),
+      timestamp: now,
+      createdAtRaw: now.toISOString(), // Garante que a mensagem otimista também tenha string
       status: 'sent',
       type: 'text'
     };
