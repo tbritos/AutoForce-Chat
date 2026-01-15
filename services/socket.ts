@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Message } from '../types';
 
-type MessageCallback = (msg: Message, phone: string) => void;
+// Atualizado para aceitar opcionalmente o contactName
+type MessageCallback = (msg: Message, phone: string, contactName?: string) => void;
 
 class RealtimeService {
   private supabase: SupabaseClient | null = null;
@@ -80,7 +81,9 @@ class RealtimeService {
         (payload) => {
           const msg = this.mapPayloadToMessage(payload.new);
           if (msg && payload.new.phone) {
-             onNewMessage(msg, payload.new.phone);
+             // Tenta pegar o nome de várias colunas comuns
+             const name = payload.new.contact_name || payload.new.name || payload.new.push_name || payload.new.sender_name;
+             onNewMessage(msg, payload.new.phone, name);
           }
         }
       )
@@ -91,7 +94,8 @@ class RealtimeService {
         (payload) => {
           const msg = this.mapPayloadToMessage(payload.new);
           if (msg && payload.new.phone) {
-             onUpdateMessage(msg, payload.new.phone);
+             const name = payload.new.contact_name || payload.new.name || payload.new.push_name || payload.new.sender_name;
+             onUpdateMessage(msg, payload.new.phone, name);
           }
         }
       )

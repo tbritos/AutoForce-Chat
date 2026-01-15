@@ -7,6 +7,7 @@ import { Settings } from './components/Settings';
 import { MOCK_CONVERSATIONS, DEFAULT_SUPABASE_CONFIG } from './constants';
 import { Conversation, ViewState, Message, SystemConfig } from './types';
 import { realtimeService } from './services/socket';
+import { formatPhone } from './utils';
 
 // Chave para salvar no localStorage
 const STORAGE_KEY = 'autoforce_monitor_config';
@@ -72,11 +73,16 @@ function App() {
                 type: msg.type || 'text'
             };
 
+            // Tenta encontrar o nome em várias colunas possíveis
+            const dbName = msg.contact_name || msg.name || msg.push_name || msg.sender_name;
+            // Se não tiver nome, usa o telefone formatado como nome de exibição
+            const displayName = dbName || formatPhone(phone);
+
             if (!conversationsMap.has(cleanPhone)) {
                 conversationsMap.set(cleanPhone, {
                     id: phone, 
-                    contactName: `Lead ${phone.slice(-4)}`,
-                    contactPhone: phone,
+                    contactName: displayName,
+                    contactPhone: phone, // Mantém o ID cru para referência técnica
                     lastMessage: appMsg.text,
                     lastMessageTime: appMsg.timestamp,
                     unreadCount: 0,
@@ -85,6 +91,15 @@ function App() {
                     tags: ['Histórico'],
                     messages: []
                 });
+            } else {
+                // Atualiza o nome se encontrarmos um melhor depois (ex: mensagem mais recente tem o nome)
+                const currentConv = conversationsMap.get(cleanPhone)!;
+                // Se o nome atual for igual ao telefone formatado (genérico) e acharmos um nome real, atualiza
+                const isGenericName = currentConv.contactName === formatPhone(currentConv.contactPhone);
+                
+                if (dbName && isGenericName) {
+                    currentConv.contactName = dbName;
+                }
             }
 
             const conv = conversationsMap.get(cleanPhone)!;
@@ -109,7 +124,7 @@ function App() {
     if (!isConfigured) return;
 
     // HANDLER 1: Novas Mensagens (INSERT)
-    const handleNewRealtimeMessage = (newMessage: Message, phone: string) => {
+    const handleNewRealtimeMessage = (newMessage: Message, phone: string, contactName?: string) => {
       setConversations(prevConversations => {
         const cleanPhone = phone.replace(/\D/g, '');
         
@@ -127,8 +142,16 @@ function App() {
             return prevConversations;
           }
 
+          // Atualiza nome se vier preenchido
+          let newName = targetConv.contactName;
+          const isGenericName = targetConv.contactName === formatPhone(targetConv.contactPhone);
+          if (contactName && isGenericName) {
+              newName = contactName;
+          }
+
           updated[existingConvIndex] = {
             ...targetConv,
+            contactName: newName,
             messages: [...targetConv.messages, newMessage],
             lastMessage: newMessage.text,
             lastMessageTime: newMessage.timestamp,
@@ -144,7 +167,7 @@ function App() {
           
           const newConversation: Conversation = {
             id: newConvId,
-            contactName: `Novo Lead (${phone.slice(-4)})`, 
+            contactName: contactName || formatPhone(phone), 
             contactPhone: phone,
             lastMessage: newMessage.text,
             lastMessageTime: newMessage.timestamp,

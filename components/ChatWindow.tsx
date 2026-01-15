@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Send, Paperclip, MoreVertical, Smile, Check, CheckCheck, Clock } from 'lucide-react';
 import { Conversation, Message } from '../types';
+import { formatPhone } from '../utils';
 
 interface ChatWindowProps {
   conversation: Conversation;
@@ -53,7 +54,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
           <div>
             <h2 className="text-lg font-bold text-white font-heading">{conversation.contactName}</h2>
             <div className="flex items-center gap-2">
-                <span className="text-sm text-af-gray-200">{conversation.contactPhone}</span>
+                <span className="text-sm text-af-gray-200">{formatPhone(conversation.contactPhone)}</span>
                 {conversation.tags.map(tag => (
                     <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-af-blue/20 text-af-blue font-bold border border-af-blue/30 uppercase">
                         {tag}
