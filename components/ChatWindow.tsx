@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Send, Paperclip, MoreVertical, Smile, Check, CheckCheck, Clock } from 'lucide-react';
-import { Conversation, Message } from '../types';
+import { Send, Paperclip, MoreVertical, Smile, Check, CheckCheck } from 'lucide-react';
+import { Conversation } from '../types';
 import { formatPhone } from '../utils';
+import { MenuTemplate } from './MessageTemplates';
 
 interface ChatWindowProps {
   conversation: Conversation;
@@ -30,6 +31,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Função para verificar se é uma mensagem de menu
+  const isMenuMessage = (text: string) => {
+    return text.trim().toLowerCase() === 'menu';
   };
 
   return (
@@ -74,31 +80,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
       <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10">
         {conversation.messages.map((msg) => {
           const isAgent = msg.senderId === 'agent';
+          const isMenu = isMenuMessage(msg.text);
+
           return (
             <div
               key={msg.id}
               className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}
             >
-              <div
-                className={`max-w-[70%] rounded-2xl px-5 py-3 shadow-md relative group ${
-                  isAgent
-                    ? 'bg-af-blue text-white rounded-tr-none' // Agent: AutoForce Blue
-                    : 'bg-[#1E2028] text-white border border-gray-700 rounded-tl-none' // Customer: Dark Gray
-                }`}
-              >
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                
-                <div className={`flex items-center justify-end mt-1 space-x-1 ${isAgent ? 'text-blue-200' : 'text-gray-400'}`}>
-                  <span className="text-[10px]">{formatTime(new Date(msg.timestamp))}</span>
-                  {isAgent && (
-                    <span>
-                      {msg.status === 'read' ? <CheckCheck size={12} /> : 
-                       msg.status === 'delivered' ? <CheckCheck size={12} className="opacity-50" /> :
-                       <Check size={12} />}
-                    </span>
-                  )}
+              {isMenu ? (
+                // Renderização Especial do Menu
+                <div className="relative group">
+                   <MenuTemplate isAgent={isAgent} />
+                   <div className={`flex items-center justify-end mt-1 space-x-1 ${isAgent ? 'text-blue-200' : 'text-gray-400'}`}>
+                      <span className="text-[10px]">{formatTime(new Date(msg.timestamp))}</span>
+                      {isAgent && (
+                        <span>
+                          {msg.status === 'read' ? <CheckCheck size={12} /> : 
+                           msg.status === 'delivered' ? <CheckCheck size={12} className="opacity-50" /> :
+                           <Check size={12} />}
+                        </span>
+                      )}
+                    </div>
                 </div>
-              </div>
+              ) : (
+                // Renderização Padrão de Texto
+                <div
+                  className={`max-w-[70%] rounded-2xl px-5 py-3 shadow-md relative group ${
+                    isAgent
+                      ? 'bg-af-blue text-white rounded-tr-none' // Agent: AutoForce Blue
+                      : 'bg-[#1E2028] text-white border border-gray-700 rounded-tl-none' // Customer: Dark Gray
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                  
+                  <div className={`flex items-center justify-end mt-1 space-x-1 ${isAgent ? 'text-blue-200' : 'text-gray-400'}`}>
+                    <span className="text-[10px]">{formatTime(new Date(msg.timestamp))}</span>
+                    {isAgent && (
+                      <span>
+                        {msg.status === 'read' ? <CheckCheck size={12} /> : 
+                         msg.status === 'delivered' ? <CheckCheck size={12} className="opacity-50" /> :
+                         <Check size={12} />}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

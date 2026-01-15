@@ -25,12 +25,11 @@ function App() {
   // Helper para ordenar mensagens com alta precisão
   const sortMessages = (msgs: Message[]) => {
       return msgs.sort((a, b) => {
-        // Tenta usar a comparação de strings ISO (preserva microssegundos do banco)
-        if (a.createdAtRaw && b.createdAtRaw) {
-            return a.createdAtRaw.localeCompare(b.createdAtRaw);
-        }
-        // Fallback para timestamp padrão se a string bruta não existir
-        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+        // Usa timestamp numérico para precisão
+        const timeA = a.createdAtRaw ? new Date(a.createdAtRaw).getTime() : new Date(a.timestamp).getTime();
+        const timeB = b.createdAtRaw ? new Date(b.createdAtRaw).getTime() : new Date(b.timestamp).getTime();
+        
+        return timeA - timeB;
       });
   };
 
