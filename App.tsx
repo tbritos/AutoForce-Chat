@@ -4,7 +4,8 @@ import { Dashboard } from './components/Dashboard';
 import { ConversationList } from './components/ConversationList';
 import { ChatWindow } from './components/ChatWindow';
 import { ContactDrawer } from './components/ContactDrawer';
-import { CRMBoard } from './components/CRMBoard'; // Novo Componente
+import { CRMBoard } from './components/CRMBoard';
+import { ContactList } from './components/ContactList'; // Novo Componente
 import { Settings } from './components/Settings';
 import { MOCK_CONVERSATIONS, DEFAULT_SUPABASE_CONFIG } from './constants';
 import { Conversation, ViewState, Message, SystemConfig, Contact } from './types';
@@ -299,10 +300,17 @@ function App() {
             <div className="w-full"><Settings config={config} onSave={handleSaveConfig} /></div>
         )}
 
-        {/* NOVA VIEW CRM KANBAN */}
+        {/* CRM KANBAN */}
         {currentView === 'crm' && (
              <div className="w-full h-full">
                 <CRMBoard contacts={allContacts} />
+             </div>
+        )}
+
+        {/* NOVA VIEW BASE DE LEADS (TABELA) */}
+        {currentView === 'history' && (
+             <div className="w-full h-full">
+                <ContactList contacts={allContacts} />
              </div>
         )}
 
@@ -345,20 +353,11 @@ function App() {
           </div>
         )}
 
-        {/* Views de placeholder */}
-        {(currentView === 'history' || currentView === 'analytics') && (
+        {currentView === 'analytics' && (
            <div className="flex items-center justify-center w-full h-full flex-col">
-               {currentView === 'history' ? (
-                   // Exemplo simples de lista se quiser implementar no futuro
-                   <div className="text-center">
-                        <h2 className="text-3xl font-heading font-bold text-af-gray-300 mb-2">Lista de Contatos</h2>
-                        <p className="text-af-gray-300">Utilize o menu Pipeline CRM para gestão visual.</p>
-                   </div>
-               ) : (
                 <div className="text-center">
                     <h2 className="text-3xl font-heading font-bold text-af-gray-300">Em Desenvolvimento</h2>
                 </div>
-               )}
            </div>
         )}
       </main>

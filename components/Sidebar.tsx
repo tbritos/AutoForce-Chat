@@ -22,8 +22,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'live-chat', icon: MessageSquare, label: 'Tempo Real' },
-    { id: 'crm', icon: Kanban, label: 'Pipeline CRM' },
-    { id: 'history', icon: Users, label: 'Lista de Contatos' },
+    { id: 'crm', icon: Kanban, label: 'Esteira MQL' },
+    { id: 'history', icon: Users, label: 'Base de Leads' },
   ];
 
   return (
