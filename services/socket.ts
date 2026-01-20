@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Message } from '../types';
+import { Message, Contact } from '../types';
 
 // Atualizado para aceitar opcionalmente o contactName
 type MessageCallback = (msg: Message, phone: string, contactName?: string) => void;
@@ -28,6 +28,38 @@ class RealtimeService {
         console.error('Supabase Service: Erro ao inicializar', e);
         this.isConnected = false;
     }
+  }
+
+  /**
+   * Busca dados do contato (CRM) pelo telefone
+   */
+  public async fetchContactByPhone(phone: string): Promise<Contact | null> {
+      if (!this.supabase) return null;
+      
+      // Remove caracteres não numéricos para garantir match
+      const cleanPhone = phone.replace(/\D/g, '');
+
+      try {
+          // Tenta buscar onde o telefone contem o numero limpo (like) ou exato
+          // Como o formato pode variar (+55...), usamos uma lógica simplificada
+          const { data, error } = await this.supabase
+            .from('contacts')
+            .select('*')
+            .ilike('phone', `%${cleanPhone}%`) 
+            .single();
+
+          if (error) {
+              // Se não achar exact match, tenta buscar sem o filtro single e pega o primeiro
+              if (error.code === 'PGRST116') return null; // Não encontrado
+              console.warn('Erro ao buscar contato:', error.message);
+              return null;
+          }
+
+          return data as Contact;
+      } catch (err) {
+          console.error('Erro na busca de contato:', err);
+          return null;
+      }
   }
 
   /**

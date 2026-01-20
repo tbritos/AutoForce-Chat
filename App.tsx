@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { ConversationList } from './components/ConversationList';
 import { ChatWindow } from './components/ChatWindow';
+import { ContactDrawer } from './components/ContactDrawer'; // Importando o CRM
 import { Settings } from './components/Settings';
 import { MOCK_CONVERSATIONS, DEFAULT_SUPABASE_CONFIG } from './constants';
-import { Conversation, ViewState, Message, SystemConfig } from './types';
+import { Conversation, ViewState, Message, SystemConfig, Contact } from './types';
 import { realtimeService } from './services/socket';
 import { formatPhone } from './utils';
 
@@ -17,36 +18,65 @@ function App() {
   const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   
+  // Estados para o CRM
+  const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [isLoadingContact, setIsLoadingContact] = useState(false);
+  
+  // Refs para manter estado atualizado dentro dos callbacks do Socket
+  const activeConversationIdRef = useRef(activeConversationId);
+  const conversationsRef = useRef(conversations);
+
   // Estado das configurações
   const [config, setConfig] = useState<SystemConfig>({ supabaseUrl: '', supabaseKey: '' });
   const [isConfigured, setIsConfigured] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // Helper para ordenar mensagens com alta precisão e desempate por ID
+  // Mantém os Refs atualizados
+  useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  // EFEITO: Buscar dados do CRM sempre que a conversa ativa mudar
+  useEffect(() => {
+      const fetchCRMData = async () => {
+          if (!activeConversationId || !isConfigured) {
+              setActiveContact(null);
+              return;
+          }
+
+          const conv = conversations.find(c => c.id === activeConversationId);
+          if (conv) {
+              setIsLoadingContact(true);
+              const contactData = await realtimeService.fetchContactByPhone(conv.contactPhone);
+              setActiveContact(contactData);
+              setIsLoadingContact(false);
+          }
+      };
+
+      fetchCRMData();
+  }, [activeConversationId, isConfigured]); // Removido 'conversations' para evitar loop, usa activeConversationId como gatilho
+
+  // Helper para ordenar mensagens
   const sortMessages = (msgs: Message[]) => {
       return msgs.sort((a, b) => {
-        // 1. Comparação por Timestamp (Numérico)
         const timeA = a.createdAtRaw ? new Date(a.createdAtRaw).getTime() : new Date(a.timestamp).getTime();
         const timeB = b.createdAtRaw ? new Date(b.createdAtRaw).getTime() : new Date(b.timestamp).getTime();
         
-        if (timeA !== timeB) {
-            return timeA - timeB;
-        }
-
-        // 2. Critério de Desempate: ID (Assumindo que IDs maiores = mensagens mais novas)
-        // O localeCompare com { numeric: true } trata strings como "10" e "2" corretamente (10 > 2)
+        if (timeA !== timeB) return timeA - timeB;
         return a.id.localeCompare(b.id, undefined, { numeric: true });
       });
   };
 
-  // 1. Carregar configurações ao iniciar
+  // 1. Carregar configurações
   useEffect(() => {
     const initSystem = async (url: string, key: string) => {
         setConfig({ supabaseUrl: url, supabaseKey: key });
         setIsConfigured(true);
         realtimeService.initialize(url, key);
-        
-        // Carrega Histórico
         await loadHistory();
     };
 
@@ -60,7 +90,6 @@ function App() {
       }
     }
 
-    // Fallback para Config Padrão (Credenciais fornecidas)
     if (DEFAULT_SUPABASE_CONFIG.supabaseUrl && DEFAULT_SUPABASE_CONFIG.supabaseKey) {
         initSystem(DEFAULT_SUPABASE_CONFIG.supabaseUrl, DEFAULT_SUPABASE_CONFIG.supabaseKey);
     } else {
@@ -68,7 +97,6 @@ function App() {
     }
   }, []);
 
-  // Função para carregar e processar histórico
   const loadHistory = async () => {
     setIsLoadingHistory(true);
     const history = await realtimeService.fetchHistory();
@@ -82,25 +110,23 @@ function App() {
             const cleanPhone = phone.replace(/\D/g, '');
 
             const appMsg: Message = {
-                id: msg.id ? String(msg.id) : `temp-${Date.now()}-${Math.random()}`, // Garante ID string
+                id: msg.id ? String(msg.id) : `temp-${Date.now()}-${Math.random()}`,
                 text: msg.content || '',
                 senderId: msg.direction === 'outbound' ? 'agent' : 'customer',
                 timestamp: new Date(msg.created_at),
-                createdAtRaw: msg.created_at, // Importante: Salva o raw
+                createdAtRaw: msg.created_at,
                 status: msg.status || 'delivered',
                 type: msg.type || 'text'
             };
 
-            // Tenta encontrar o nome em várias colunas possíveis
             const dbName = msg.contact_name || msg.name || msg.push_name || msg.sender_name;
-            // Se não tiver nome, usa o telefone formatado como nome de exibição
             const displayName = dbName || formatPhone(phone);
 
             if (!conversationsMap.has(cleanPhone)) {
                 conversationsMap.set(cleanPhone, {
                     id: phone, 
                     contactName: displayName,
-                    contactPhone: phone, // Mantém o ID cru para referência técnica
+                    contactPhone: phone,
                     lastMessage: appMsg.text,
                     lastMessageTime: appMsg.timestamp,
                     unreadCount: 0,
@@ -110,11 +136,8 @@ function App() {
                     messages: []
                 });
             } else {
-                // Atualiza o nome se encontrarmos um melhor depois (ex: mensagem mais recente tem o nome)
                 const currentConv = conversationsMap.get(cleanPhone)!;
-                // Se o nome atual for igual ao telefone formatado (genérico) e acharmos um nome real, atualiza
                 const isGenericName = currentConv.contactName === formatPhone(currentConv.contactPhone);
-                
                 if (dbName && isGenericName) {
                     currentConv.contactName = dbName;
                 }
@@ -123,14 +146,12 @@ function App() {
             const conv = conversationsMap.get(cleanPhone)!;
             conv.messages.push(appMsg);
             
-            // Atualiza lastMessage baseado no timestamp
             if (appMsg.timestamp > conv.lastMessageTime) {
                 conv.lastMessage = appMsg.text;
                 conv.lastMessageTime = appMsg.timestamp;
             }
         });
 
-        // Ordena as mensagens dentro de cada conversa carregada (segurança extra)
         conversationsMap.forEach(conv => {
             conv.messages = sortMessages(conv.messages);
         });
@@ -146,37 +167,34 @@ function App() {
     setIsLoadingHistory(false);
   };
 
-  // 2. Conectar ao Realtime quando estiver configurado
   useEffect(() => {
     if (!isConfigured) return;
 
-    // HANDLER 1: Novas Mensagens (INSERT)
     const handleNewRealtimeMessage = (newMessage: Message, phone: string, contactName?: string) => {
+      console.log('Nova mensagem recebida via Socket:', newMessage.text);
+      
       setConversations(prevConversations => {
         const cleanPhone = phone.replace(/\D/g, '');
+        const currentActiveId = activeConversationIdRef.current;
         
         const existingConvIndex = prevConversations.findIndex(c => 
           c.contactPhone.replace(/\D/g, '') === cleanPhone
         );
 
         if (existingConvIndex >= 0) {
-          // --- Conversa Existente ---
           const updated = [...prevConversations];
           const targetConv = updated[existingConvIndex];
 
-          // Evita duplicatas
           if (targetConv.messages.some(m => m.id === newMessage.id)) {
             return prevConversations;
           }
 
-          // Atualiza nome se vier preenchido
           let newName = targetConv.contactName;
           const isGenericName = targetConv.contactName === formatPhone(targetConv.contactPhone);
           if (contactName && isGenericName) {
               newName = contactName;
           }
 
-          // Adiciona a nova mensagem e ORDENA por data + ID
           const newMessagesList = sortMessages([...targetConv.messages, newMessage]);
 
           updated[existingConvIndex] = {
@@ -185,14 +203,13 @@ function App() {
             messages: newMessagesList,
             lastMessage: newMessage.text,
             lastMessageTime: newMessage.timestamp,
-            unreadCount: (targetConv.id === activeConversationId) ? 0 : targetConv.unreadCount + 1,
+            unreadCount: (targetConv.id === currentActiveId) ? 0 : targetConv.unreadCount + 1,
             status: 'active' as const
           };
           
           return updated.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
 
         } else {
-          // --- Nova Conversa ---
           const newConvId = phone; 
           
           const newConversation: Conversation = {
@@ -213,20 +230,18 @@ function App() {
       });
     };
 
-    // HANDLER 2: Atualização de Mensagens (UPDATE - ex: status delivered/read)
     const handleMessageUpdate = (updatedMessage: Message, phone: string) => {
         setConversations(prevConversations => {
             const cleanPhone = phone.replace(/\D/g, '');
             
             return prevConversations.map(conv => {
-                // Se for a conversa correta
                 if (conv.contactPhone.replace(/\D/g, '') === cleanPhone) {
                     const updatedMsgs = conv.messages.map(m => 
                         m.id === updatedMessage.id ? updatedMessage : m
                     );
                     return {
                         ...conv,
-                        messages: sortMessages(updatedMsgs) // Mantém ordenado
+                        messages: sortMessages(updatedMsgs)
                     };
                 }
                 return conv;
@@ -234,20 +249,19 @@ function App() {
         });
     };
 
-    // Conecta os listeners
     realtimeService.connect(handleNewRealtimeMessage, handleMessageUpdate);
 
     return () => {
       realtimeService.disconnect();
     };
-  }, [isConfigured, activeConversationId]); 
+  }, [isConfigured]);
 
   const handleSaveConfig = (newConfig: SystemConfig) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
     setConfig(newConfig);
     setIsConfigured(true);
     realtimeService.initialize(newConfig.supabaseUrl, newConfig.supabaseKey);
-    loadHistory(); // Recarrega com novas credenciais
+    loadHistory();
     setCurrentView('live-chat');
   };
 
@@ -262,7 +276,6 @@ function App() {
         return;
     }
 
-    // Otimista (ID temporário muito alto para ficar no final até o real chegar)
     const now = new Date();
     const tempId = 'temp-' + Date.now();
     const optimisticMessage: Message = {
@@ -279,7 +292,7 @@ function App() {
       if (conv.id === activeConversationId) {
         return {
           ...conv,
-          messages: sortMessages([...conv.messages, optimisticMessage]), // Ordena também no envio otimista
+          messages: sortMessages([...conv.messages, optimisticMessage]),
           lastMessage: text,
           lastMessageTime: new Date()
         };
@@ -302,7 +315,6 @@ function App() {
       <Sidebar currentView={currentView} onChangeView={setCurrentView} />
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Passando as conversas reais para o Dashboard */}
         {currentView === 'dashboard' && <Dashboard conversations={conversations} />}
 
         {currentView === 'settings' && (
@@ -318,34 +330,44 @@ function App() {
               activeId={activeConversationId} 
               onSelect={setActiveConversationId} 
             />
-            <div className="flex-1 h-full">
-              {isLoadingHistory ? (
-                <div className="flex-1 h-full flex flex-col items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-af-blue mb-4"></div>
-                    <p className="text-af-gray-200">Carregando histórico de mensagens...</p>
+            
+            {/* Wrapper Central: Chat + CRM */}
+            <div className="flex-1 flex h-full">
+                <div className="flex-1 min-w-0 h-full border-r border-gray-800">
+                    {isLoadingHistory ? (
+                        <div className="h-full flex flex-col items-center justify-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-af-blue mb-4"></div>
+                            <p className="text-af-gray-200">Carregando...</p>
+                        </div>
+                    ) : activeConversation ? (
+                        <ChatWindow 
+                        conversation={activeConversation} 
+                        onSendMessage={handleSendMessage} 
+                        />
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-af-gray-300">
+                            <div className="w-20 h-20 rounded-full bg-af-blue/10 flex items-center justify-center mb-4">
+                                <svg className="w-10 h-10 text-af-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                </svg>
+                            </div>
+                            <p className="text-xl font-heading font-bold text-white">Pronto para Atender</p>
+                            <p className="text-sm text-center max-w-md mt-2 text-af-gray-200">
+                                Conectado ao Supabase com sucesso.
+                            </p>
+                        </div>
+                    )}
                 </div>
-              ) : activeConversation ? (
-                <ChatWindow 
-                  conversation={activeConversation} 
-                  onSendMessage={handleSendMessage} 
-                />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-af-gray-300">
-                    <div className="w-20 h-20 rounded-full bg-af-blue/10 flex items-center justify-center mb-4">
-                        <svg className="w-10 h-10 text-af-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                    </div>
-                  <p className="text-xl font-heading font-bold text-white">Pronto para Atender</p>
-                  <p className="text-sm text-center max-w-md mt-2 text-af-gray-200">
-                      Conectado ao Supabase com sucesso. 
-                      <br/>
-                      {conversations.length === 0 
-                        ? "Nenhuma mensagem encontrada no histórico." 
-                        : "Selecione uma conversa ao lado para começar."}
-                  </p>
-                </div>
-              )}
+
+                {/* Renderização Condicional do CRM (ContactDrawer) se houver conversa ativa */}
+                {activeConversation && (
+                    <ContactDrawer 
+                        contact={activeContact} 
+                        isLoading={isLoadingContact} 
+                        phone={activeConversation.contactPhone}
+                        name={activeConversation.contactName}
+                    />
+                )}
             </div>
           </div>
         )}

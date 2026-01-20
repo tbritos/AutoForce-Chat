@@ -1,3 +1,4 @@
+
 export interface User {
   id: string;
   name: string;
@@ -27,6 +28,22 @@ export interface Conversation {
   platform: 'whatsapp' | 'instagram' | 'email';
   tags: string[];
   messages: Message[];
+}
+
+// Interface nova para o Mini CRM
+export interface Contact {
+  id: number;
+  created_at: string;
+  phone: string;
+  name: string;
+  segmento?: string;
+  status?: string;
+  temperatura?: 'Frio' | 'Morno' | 'Quente' | string;
+  empresa?: string;
+  cargo?: string;
+  pipedrive_id?: number;
+  resumo_ia?: string;
+  ultima_interacao?: string;
 }
 
 export type ViewState = 'dashboard' | 'live-chat' | 'history' | 'settings' | 'analytics';
