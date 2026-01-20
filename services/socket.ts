@@ -8,6 +8,9 @@ class RealtimeService {
   private supabase: SupabaseClient | null = null;
   private subscription: any = null;
   private isConnected: boolean = false;
+  
+  // CACHE: Armazena contatos em memória para acesso instantâneo (Chave: Telefone Limpo)
+  private contactCache: Map<string, Contact> = new Map();
 
   /**
    * Inicializa o cliente Supabase com as credenciais
@@ -31,13 +34,20 @@ class RealtimeService {
   }
 
   /**
-   * Busca dados de UM contato (Mini CRM)
+   * Busca dados de UM contato (Mini CRM) com suporte a Cache
    */
   public async fetchContactByPhone(phone: string): Promise<Contact | null> {
       if (!this.supabase) return null;
       const cleanPhone = phone.replace(/\D/g, '');
 
+      // 1. Verifica se já está no cache
+      if (this.contactCache.has(cleanPhone)) {
+          console.log('Cache Hit: Contato recuperado da memória', cleanPhone);
+          return this.contactCache.get(cleanPhone) || null;
+      }
+
       try {
+          // 2. Se não estiver, busca no banco
           const { data, error } = await this.supabase
             .from('contacts')
             .select('*')
@@ -50,7 +60,14 @@ class RealtimeService {
               return null;
           }
 
-          return data as Contact;
+          const contact = data as Contact;
+          
+          // 3. Salva no cache para a próxima vez
+          if (contact) {
+              this.contactCache.set(cleanPhone, contact);
+          }
+
+          return contact;
       } catch (err) {
           console.error('Erro na busca de contato:', err);
           return null;
@@ -58,7 +75,7 @@ class RealtimeService {
   }
 
   /**
-   * Busca TODOS os contatos para o Kanban/Dashboard
+   * Busca TODOS os contatos para o Kanban/Dashboard e popula o Cache
    */
   public async fetchAllContacts(): Promise<Contact[]> {
       if (!this.supabase) return [];
@@ -74,7 +91,17 @@ class RealtimeService {
               return [];
           }
 
-          return (data as Contact[]) || [];
+          const contacts = (data as Contact[]) || [];
+
+          // Popula o cache massivamente
+          contacts.forEach(c => {
+              if (c.phone) {
+                  const clean = c.phone.replace(/\D/g, '');
+                  this.contactCache.set(clean, c);
+              }
+          });
+
+          return contacts;
       } catch (err) {
           console.error('Erro fatal ao buscar todos contatos:', err);
           return [];
@@ -88,12 +115,12 @@ class RealtimeService {
     if (!this.supabase) return [];
 
     try {
-        // Busca as últimas 500 mensagens ordenadas por data
+        // Busca as últimas 1000 mensagens ordenadas por data
         const { data, error } = await this.supabase
             .from('messages')
             .select('*')
             .order('created_at', { ascending: true })
-            .limit(1000); // Aumentei o limite para pegar mais contexto
+            .limit(1000); 
 
         if (error) {
             console.error('Erro ao buscar histórico:', error);

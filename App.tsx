@@ -47,30 +47,27 @@ function App() {
       loadCRMData();
   }, [isConfigured]);
 
-  // Efeito para carregar contato individual ao abrir chat
+  // Efeito OTIMIZADO para carregar contato individual usando Cache
   useEffect(() => {
       const fetchIndividualContact = async () => {
           if (!activeConversationId || !isConfigured) {
               setActiveContact(null);
               return;
           }
+          
           const conv = conversations.find(c => c.id === activeConversationId);
           if (conv) {
               setIsLoadingContact(true);
-              // Tenta achar na lista carregada primeiro (cache local)
-              const cached = allContacts.find(c => c.phone && c.phone.includes(conv.contactPhone.replace(/\D/g, '')));
-              if (cached) {
-                  setActiveContact(cached);
-              } else {
-                  // Fallback para fetch individual se não estiver na lista inicial
-                  const contactData = await realtimeService.fetchContactByPhone(conv.contactPhone);
-                  setActiveContact(contactData);
-              }
+              // O service agora possui um cache interno inteligente.
+              // Se o dado já existir (veio do loadCRMData ou de navegação anterior),
+              // ele retorna instantaneamente sem bater na API.
+              const contactData = await realtimeService.fetchContactByPhone(conv.contactPhone);
+              setActiveContact(contactData);
               setIsLoadingContact(false);
           }
       };
       fetchIndividualContact();
-  }, [activeConversationId, isConfigured, allContacts]);
+  }, [activeConversationId, isConfigured]); // Removido 'allContacts' da dependência pois o service gerencia o cache
 
   // Helper de ordenação
   const sortMessages = (msgs: Message[]) => {
