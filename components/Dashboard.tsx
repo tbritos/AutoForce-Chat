@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+
+import React, { useMemo, useState } from 'react';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, 
     PieChart, Pie, Cell, BarChart, Bar 
 } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Users, Building2, BrainCircuit, Target } from 'lucide-react';
+import { Users, Building2, BrainCircuit, Target, Calendar as CalendarIcon, FilterX } from 'lucide-react';
 import { Conversation, Contact } from '../types';
 
 interface DashboardProps {
@@ -12,14 +13,43 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts }) => {
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
+  // Filtrar dados com base nas datas selecionadas
+  const filteredData = useMemo(() => {
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
+    
+    // Ajustar o final do dia para incluir o dia inteiro selecionado
+    if (end) end.setHours(23, 59, 59, 999);
+
+    const filterDate = (dateString: string | Date) => {
+        if (!start && !end) return true;
+        const d = new Date(dateString);
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+        return true;
+    };
+
+    const filteredContacts = contacts.filter(c => filterDate(c.created_at));
+    
+    // Filtra conversas baseadas na última mensagem
+    const filteredConversations = conversations.filter(c => filterDate(c.lastMessageTime));
+
+    return { contacts: filteredContacts, conversations: filteredConversations };
+  }, [contacts, conversations, startDate, endDate]);
   
-  // Calcular Estatísticas
+  // Calcular Estatísticas (agora usando filteredData)
   const stats = useMemo(() => {
+    const currentContacts = filteredData.contacts;
+    const currentConversations = filteredData.conversations;
+
     let mqlCount = 0;
     
     // --- 1. Dados de Segmentação (CRM) ---
     const segmentMap = new Map<string, number>();
-    contacts.forEach(c => {
+    currentContacts.forEach(c => {
         const seg = c.segmento || 'Não Identificado';
         segmentMap.set(seg, (segmentMap.get(seg) || 0) + 1);
 
@@ -36,21 +66,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
             value,
             color: COLORS[index % COLORS.length]
         }))
-        .sort((a, b) => b.value - a.value); // Ordena por maior volume
+        .sort((a, b) => b.value - a.value);
 
     // --- 2. Dados de Qualificação (Funil) ---
     const funnelData = [
-        { name: 'Total Leads', value: contacts.length, fill: '#3b82f6' },
-        { name: 'Em Triagem', value: contacts.filter(c => !c.temperatura || c.temperatura === 'Morno').length, fill: '#f59e0b' },
+        { name: 'Total Leads', value: currentContacts.length, fill: '#3b82f6' },
+        { name: 'Em Triagem', value: currentContacts.filter(c => !c.temperatura || c.temperatura === 'Morno').length, fill: '#f59e0b' },
         { name: 'MQLs (Quente)', value: mqlCount, fill: '#10b981' },
-        { name: 'Descarte', value: contacts.filter(c => c.temperatura === 'Frio').length, fill: '#ef4444' }
+        { name: 'Descarte', value: currentContacts.filter(c => c.temperatura === 'Frio').length, fill: '#ef4444' }
     ];
 
     // --- 3. Mensagens (Volume de Atendimento) ---
-    // Apenas para mostrar atividade da IA
     let totalMessages = 0;
     const hoursMap = new Map<string, number>();
-    conversations.forEach(conv => {
+    currentConversations.forEach(conv => {
         totalMessages += conv.messages.length;
         conv.messages.forEach(msg => {
             const hour = new Date(msg.timestamp).getHours().toString().padStart(2, '0') + 'h';
@@ -62,15 +91,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
         .sort((a, b) => a.time.localeCompare(b.time));
 
     return {
-        totalLeads: contacts.length,
+        totalLeads: currentContacts.length,
         mqlCount,
-        conversionRate: contacts.length > 0 ? ((mqlCount / contacts.length) * 100).toFixed(1) : '0',
+        conversionRate: currentContacts.length > 0 ? ((mqlCount / currentContacts.length) * 100).toFixed(1) : '0',
         segmentChartData,
         funnelData,
         activityData,
         totalMessages
     };
-  }, [conversations, contacts]);
+  }, [filteredData]);
 
   const KPIS = [
     { label: 'Total de Leads', value: stats.totalLeads, icon: Users, color: 'text-white' },
@@ -79,11 +108,57 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
     { label: 'Segmentos Ativos', value: stats.segmentChartData.filter(s => s.name !== 'Não Identificado').length, icon: Building2, color: 'text-af-orange' },
   ];
 
+  const clearFilters = () => {
+      setStartDate('');
+      setEndDate('');
+  };
+
   return (
     <div className="p-8 h-full overflow-y-auto bg-af-black custom-scrollbar">
-      <header className="mb-8 border-b border-gray-800 pb-6">
-        <h1 className="text-3xl font-bold text-white mb-2 font-heading">Marketing Intelligence</h1>
-        <p className="text-af-gray-200">Acompanhe a performance da IA na qualificação e geração de MQLs.</p>
+      <header className="mb-8 border-b border-gray-800 pb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <div>
+            <h1 className="text-3xl font-bold text-white mb-2 font-heading">Marketing Intelligence</h1>
+            <p className="text-af-gray-200">Acompanhe a performance da IA na qualificação e geração de MQLs.</p>
+        </div>
+
+        {/* Date Filter Controls */}
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 bg-[#0A0C14] p-3 rounded-xl border border-gray-800">
+            <div className="flex items-center gap-2">
+                <div className="flex flex-col">
+                    <label className="text-[10px] text-gray-500 font-bold ml-1">DE</label>
+                    <div className="relative">
+                        <CalendarIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-af-blue" />
+                        <input 
+                            type="date" 
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="bg-[#1E2028] border border-gray-700 text-white text-xs rounded-lg pl-8 pr-2 py-1.5 focus:border-af-blue focus:outline-none"
+                        />
+                    </div>
+                </div>
+                <div className="flex flex-col">
+                    <label className="text-[10px] text-gray-500 font-bold ml-1">ATÉ</label>
+                    <div className="relative">
+                        <CalendarIcon size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-af-blue" />
+                        <input 
+                            type="date" 
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="bg-[#1E2028] border border-gray-700 text-white text-xs rounded-lg pl-8 pr-2 py-1.5 focus:border-af-blue focus:outline-none"
+                        />
+                    </div>
+                </div>
+            </div>
+            {(startDate || endDate) && (
+                <button 
+                    onClick={clearFilters}
+                    className="p-1.5 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-colors"
+                    title="Limpar Filtros"
+                >
+                    <FilterX size={16} />
+                </button>
+            )}
+        </div>
       </header>
 
       {/* KPI Cards */}
@@ -103,10 +178,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         
-        {/* Gráfico de Pizza: Segmentação (MUITO IMPORTANTE PARA O USUÁRIO) */}
+        {/* Gráfico de Pizza: Segmentação */}
         <div className="lg:col-span-1 bg-[#0A0C14] p-6 rounded-xl border border-gray-800 shadow-lg flex flex-col">
             <h3 className="text-lg font-bold text-white font-heading mb-1">Share por Segmento</h3>
-            <p className="text-xs text-gray-500 mb-4">Distribuição da base de leads por vertical.</p>
+            <p className="text-xs text-gray-500 mb-4">
+                {startDate || endDate ? 'Distribuição no período selecionado.' : 'Distribuição total da base.'}
+            </p>
             
             <div className="flex-1 min-h-[250px] relative">
                 {stats.segmentChartData.length > 0 ? (
@@ -130,7 +207,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
                         </PieChart>
                     </ResponsiveContainer>
                 ) : (
-                    <div className="flex h-full items-center justify-center text-gray-600 text-xs">Sem dados</div>
+                    <div className="flex h-full items-center justify-center text-gray-600 text-xs">Sem dados para este período</div>
                 )}
             </div>
         </div>

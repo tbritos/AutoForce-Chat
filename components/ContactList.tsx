@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { Contact } from '../types';
 import { formatPhone } from '../utils';
-import { Search, Download, Building2, Flame, Snowflake, ThermometerSun, AlertCircle, Calendar } from 'lucide-react';
+import { Search, Download, Building2, Flame, Snowflake, ThermometerSun, AlertCircle, Calendar, FilterX } from 'lucide-react';
 
 interface ContactListProps {
   contacts: Contact[];
@@ -9,12 +10,29 @@ interface ContactListProps {
 
 export const ContactList: React.FC<ContactListProps> = ({ contacts }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
-  const filteredContacts = contacts.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.phone.includes(searchTerm) ||
-    (c.empresa && c.empresa.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredContacts = contacts.filter(c => {
+    // Filtro de Texto
+    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          c.phone.includes(searchTerm) ||
+                          (c.empresa && c.empresa.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // Filtro de Data
+    let matchesDate = true;
+    if (startDate || endDate) {
+        const d = new Date(c.created_at);
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+        if (end) end.setHours(23, 59, 59, 999);
+
+        if (start && d < start) matchesDate = false;
+        if (end && d > end) matchesDate = false;
+    }
+
+    return matchesSearch && matchesDate;
+  });
 
   const getTempBadge = (temp?: string) => {
     const t = (temp || '').toLowerCase();
@@ -45,16 +63,46 @@ export const ContactList: React.FC<ContactListProps> = ({ contacts }) => {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={16} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome, telefone ou empresa..." 
-            className="w-full bg-[#0A0C14] border border-gray-700 text-white text-sm rounded-lg pl-9 pr-4 py-3 focus:border-af-blue focus:ring-1 focus:ring-af-blue transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        {/* Toolbar de Filtros */}
+        <div className="flex flex-col md:flex-row gap-4">
+            {/* Search */}
+            <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={16} />
+            <input 
+                type="text" 
+                placeholder="Buscar por nome, telefone ou empresa..." 
+                className="w-full bg-[#0A0C14] border border-gray-700 text-white text-sm rounded-lg pl-9 pr-4 py-3 focus:border-af-blue focus:ring-1 focus:ring-af-blue transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            </div>
+
+            {/* Date Picker */}
+            <div className="flex items-center gap-2 bg-[#0A0C14] border border-gray-700 rounded-lg px-3 py-2">
+                <Calendar size={16} className="text-af-blue" />
+                <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-transparent text-white text-sm border-none focus:ring-0 w-32 px-1"
+                />
+                <span className="text-gray-500">-</span>
+                <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-transparent text-white text-sm border-none focus:ring-0 w-32 px-1"
+                />
+                {(startDate || endDate) && (
+                    <button 
+                        onClick={() => { setStartDate(''); setEndDate(''); }}
+                        className="ml-2 p-1 hover:bg-white/10 rounded text-red-500"
+                        title="Limpar Data"
+                    >
+                        <FilterX size={16} />
+                    </button>
+                )}
+            </div>
         </div>
       </div>
 

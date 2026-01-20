@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Contact } from '../types';
 import { 
@@ -12,7 +13,9 @@ import {
     Columns,
     CheckCircle2,
     ArrowRightCircle,
-    BrainCircuit
+    BrainCircuit,
+    Calendar,
+    FilterX
 } from 'lucide-react';
 import { formatPhone } from '../utils';
 
@@ -24,13 +27,15 @@ interface CRMBoardProps {
 const STATUS_COLUMNS = [
     { id: 'novo', label: 'Novos / Sem Dados', color: 'border-gray-500', icon: AlertCircle },
     { id: 'triagem', label: 'Em Triagem (IA)', color: 'border-blue-500', icon: BrainCircuit },
-    { id: 'mql', label: 'MQL (Pronto p/ Vendas)', color: 'border-green-500', icon: CheckCircle2 }, // O "pote de ouro" do marketing
+    { id: 'mql', label: 'MQL (Pronto p/ Vendas)', color: 'border-green-500', icon: CheckCircle2 },
     { id: 'frio', label: 'Descarte / Nutrição', color: 'border-slate-700', icon: Snowflake },
 ];
 
 export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState<'status' | 'segment'>('status'); // Toggle de Visão
+    const [viewMode, setViewMode] = useState<'status' | 'segment'>('status');
+    const [startDate, setStartDate] = useState<string>('');
+    const [endDate, setEndDate] = useState<string>('');
 
     // Extrair segmentos únicos
     const uniqueSegments = useMemo(() => {
@@ -41,18 +46,31 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
         return Array.from(segs).sort();
     }, [contacts]);
 
+    // Função de filtro de data
+    const filterByDate = (contact: Contact) => {
+        if (!startDate && !endDate) return true;
+        const d = new Date(contact.created_at);
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+        if (end) end.setHours(23, 59, 59, 999);
+
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+        return true;
+    };
+
     // Lógica principal de distribuição dos cards
     const boardData = useMemo(() => {
-        // Se o modo for SEGMENTO, as colunas são os próprios segmentos
+        // Se o modo for SEGMENTO
         if (viewMode === 'segment') {
             const dynamicColumns: Record<string, Contact[]> = {};
-            
-            // Inicializa colunas baseadas nos segmentos existentes + "Sem Segmento"
             uniqueSegments.forEach(seg => dynamicColumns[seg] = []);
             dynamicColumns['sem_segmento'] = [];
 
             contacts.forEach(contact => {
+                // Filtros (Busca e Data)
                 if (searchTerm && !contact.name.toLowerCase().includes(searchTerm.toLowerCase()) && !contact.phone.includes(searchTerm)) return;
+                if (!filterByDate(contact)) return;
                 
                 if (contact.segmento && dynamicColumns[contact.segmento]) {
                     dynamicColumns[contact.segmento].push(contact);
@@ -72,34 +90,29 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
         };
 
         contacts.forEach(contact => {
+            // Filtros (Busca e Data)
             if (searchTerm && !contact.name.toLowerCase().includes(searchTerm.toLowerCase()) && !contact.phone.includes(searchTerm)) return;
+            if (!filterByDate(contact)) return;
 
             const statusLower = (contact.status || '').toLowerCase();
             const tempLower = (contact.temperatura || '').toLowerCase();
 
-            // Lógica de Marketing (MQL vs Lixo vs Triagem)
-            
-            // 1. MQL: Temperatura Quente ou Status de Sucesso
             if (tempLower.includes('quente') || statusLower.includes('proposta') || statusLower.includes('ganho') || statusLower.includes('agendado')) {
                 columns.mql.push(contact);
             } 
-            // 2. Frio/Descarte
             else if (tempLower.includes('frio') || statusLower.includes('perdi') || statusLower.includes('arquivado')) {
                 columns.frio.push(contact);
             }
-            // 3. Em Triagem: IA conversando, temperatura morna ou status de atendimento
             else if (statusLower.includes('atendimento') || tempLower.includes('morno') || contact.segmento || contact.cargo) {
-                // Se já tem algum dado enriquecido (segmento/cargo) mas não é quente nem frio, ainda tá em triagem
                 columns.triagem.push(contact);
             }
-            // 4. Novo: Sem dados relevantes
             else {
                 columns.novo.push(contact);
             }
         });
 
         return columns;
-    }, [contacts, searchTerm, viewMode, uniqueSegments]);
+    }, [contacts, searchTerm, viewMode, uniqueSegments, startDate, endDate]);
 
     const getTempIcon = (temp?: string) => {
         const t = (temp || '').toLowerCase();
@@ -109,19 +122,16 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
         return null;
     };
 
-    // Gera as colunas dinamicamente baseado no modo de visualização
     const activeColumns = useMemo(() => {
         if (viewMode === 'status') return STATUS_COLUMNS;
         
-        // Colunas de Segmento
         const segCols = uniqueSegments.map(seg => ({
             id: seg,
             label: seg,
-            color: 'border-af-blue', // Cor padrão para segmentos
+            color: 'border-af-blue',
             icon: Building2
         }));
         
-        // Adiciona coluna de "Sem Segmento" no final
         segCols.push({
             id: 'sem_segmento',
             label: 'Sem Segmento Identificado',
@@ -147,27 +157,53 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                     </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                    {/* View Mode Toggle */}
-                    <div className="bg-[#1E2028] p-1 rounded-lg border border-gray-700 flex">
-                        <button 
-                            onClick={() => setViewMode('status')}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all ${viewMode === 'status' ? 'bg-af-blue text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            <Columns size={14} />
-                            Processo
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('segment')}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all ${viewMode === 'segment' ? 'bg-af-blue text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            <LayoutList size={14} />
-                            Por Segmento
-                        </button>
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        {/* View Mode Toggle */}
+                        <div className="bg-[#1E2028] p-1 rounded-lg border border-gray-700 flex shrink-0">
+                            <button 
+                                onClick={() => setViewMode('status')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all ${viewMode === 'status' ? 'bg-af-blue text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                <Columns size={14} />
+                                Processo
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('segment')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all ${viewMode === 'segment' ? 'bg-af-blue text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
+                            >
+                                <LayoutList size={14} />
+                                Por Segmento
+                            </button>
+                        </div>
+
+                         {/* Date Filter */}
+                        <div className="flex items-center gap-2 bg-[#1E2028] p-1 rounded-lg border border-gray-700">
+                            <input 
+                                type="date" 
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="bg-transparent text-white text-xs border-none focus:ring-0 w-24 px-1"
+                                placeholder="Início"
+                            />
+                            <span className="text-gray-500 text-xs">-</span>
+                            <input 
+                                type="date" 
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="bg-transparent text-white text-xs border-none focus:ring-0 w-24 px-1"
+                                placeholder="Fim"
+                            />
+                            {(startDate || endDate) && (
+                                <button onClick={() => { setStartDate(''); setEndDate(''); }} className="text-red-500 hover:text-red-400 p-1">
+                                    <FilterX size={12} />
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Busca */}
-                    <div className="relative w-full sm:w-64">
+                    <div className="relative w-full">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
                             type="text" 
@@ -208,14 +244,12 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                                     boardData[col.id]?.map(contact => (
                                         <div key={contact.id} className="bg-[#1E2028] p-4 rounded-lg border border-gray-700 hover:border-af-blue/50 transition-all shadow-sm group cursor-pointer relative overflow-hidden">
                                             
-                                            {/* Tag de MQL Highlight */}
                                             {col.id === 'mql' && (
                                                 <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] px-2 py-0.5 rounded-bl-lg font-bold">
                                                     READY
                                                 </div>
                                             )}
 
-                                            {/* Temperatura Lateral Visual */}
                                             <div className={`absolute left-0 top-0 bottom-0 w-1 ${
                                                 (contact.temperatura || '').toLowerCase().includes('quente') ? 'bg-red-500' : 
                                                 (contact.temperatura || '').toLowerCase().includes('morno') ? 'bg-orange-400' : 
@@ -234,7 +268,6 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
 
                                                 <p className="text-[10px] text-af-blue font-mono mb-3">{formatPhone(contact.phone)}</p>
                                                 
-                                                {/* Tags de Enriquecimento */}
                                                 <div className="flex flex-wrap gap-2 mt-2">
                                                     {contact.segmento ? (
                                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-af-blue/10 text-af-blue border border-af-blue/20">
@@ -247,8 +280,6 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                                                         </span>
                                                     )}
                                                 </div>
-
-                                                {/* Botão de Ação Rápida (Simulação) */}
                                                 <div className="mt-3 pt-3 border-t border-gray-700 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <span className="text-[10px] text-gray-500">
                                                         {new Date(contact.created_at).toLocaleDateString()}
