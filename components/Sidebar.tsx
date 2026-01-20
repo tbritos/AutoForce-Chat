@@ -6,7 +6,8 @@ import {
   Settings, 
   LogOut, 
   BarChart2,
-  Zap
+  Zap,
+  Kanban
 } from 'lucide-react';
 import { ViewState } from '../types';
 import { Logo } from './Logo';
@@ -21,8 +22,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'live-chat', icon: MessageSquare, label: 'Tempo Real' },
-    { id: 'history', icon: Users, label: 'Histórico' },
-    { id: 'analytics', icon: BarChart2, label: 'Performance' },
+    { id: 'crm', icon: Kanban, label: 'Pipeline CRM' },
+    { id: 'history', icon: Users, label: 'Lista de Contatos' },
   ];
 
   return (

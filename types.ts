@@ -37,7 +37,7 @@ export interface Contact {
   phone: string;
   name: string;
   segmento?: string;
-  status?: string;
+  status?: string; // Ex: Novo, Em Atendimento, Proposta, Ganho
   temperatura?: 'Frio' | 'Morno' | 'Quente' | string;
   empresa?: string;
   cargo?: string;
@@ -46,11 +46,12 @@ export interface Contact {
   ultima_interacao?: string;
 }
 
-export type ViewState = 'dashboard' | 'live-chat' | 'history' | 'settings' | 'analytics';
+export type ViewState = 'dashboard' | 'live-chat' | 'crm' | 'history' | 'settings' | 'analytics';
 
 export interface ChartData {
   name: string;
   value: number;
+  color?: string;
 }
 
 export interface SystemConfig {

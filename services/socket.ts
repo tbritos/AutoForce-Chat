@@ -31,17 +31,13 @@ class RealtimeService {
   }
 
   /**
-   * Busca dados do contato (CRM) pelo telefone
+   * Busca dados de UM contato (Mini CRM)
    */
   public async fetchContactByPhone(phone: string): Promise<Contact | null> {
       if (!this.supabase) return null;
-      
-      // Remove caracteres não numéricos para garantir match
       const cleanPhone = phone.replace(/\D/g, '');
 
       try {
-          // Tenta buscar onde o telefone contem o numero limpo (like) ou exato
-          // Como o formato pode variar (+55...), usamos uma lógica simplificada
           const { data, error } = await this.supabase
             .from('contacts')
             .select('*')
@@ -49,9 +45,8 @@ class RealtimeService {
             .single();
 
           if (error) {
-              // Se não achar exact match, tenta buscar sem o filtro single e pega o primeiro
-              if (error.code === 'PGRST116') return null; // Não encontrado
-              console.warn('Erro ao buscar contato:', error.message);
+              if (error.code === 'PGRST116') return null; 
+              console.warn('Erro ao buscar contato individual:', error.message);
               return null;
           }
 
@@ -59,6 +54,30 @@ class RealtimeService {
       } catch (err) {
           console.error('Erro na busca de contato:', err);
           return null;
+      }
+  }
+
+  /**
+   * Busca TODOS os contatos para o Kanban/Dashboard
+   */
+  public async fetchAllContacts(): Promise<Contact[]> {
+      if (!this.supabase) return [];
+
+      try {
+          const { data, error } = await this.supabase
+            .from('contacts')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (error) {
+              console.error('Erro ao buscar lista de contatos:', error);
+              return [];
+          }
+
+          return (data as Contact[]) || [];
+      } catch (err) {
+          console.error('Erro fatal ao buscar todos contatos:', err);
+          return [];
       }
   }
 
@@ -74,7 +93,7 @@ class RealtimeService {
             .from('messages')
             .select('*')
             .order('created_at', { ascending: true })
-            .limit(500);
+            .limit(1000); // Aumentei o limite para pegar mais contexto
 
         if (error) {
             console.error('Erro ao buscar histórico:', error);
@@ -90,7 +109,6 @@ class RealtimeService {
 
   /**
    * Conecta ao canal Realtime do Supabase
-   * Agora aceita callback para novas mensagens E atualizações
    */
   public connect(onNewMessage: MessageCallback, onUpdateMessage: MessageCallback) {
     if (!this.supabase || !this.isConnected) {
@@ -113,7 +131,6 @@ class RealtimeService {
         (payload) => {
           const msg = this.mapPayloadToMessage(payload.new);
           if (msg && payload.new.phone) {
-             // Tenta pegar o nome de várias colunas comuns
              const name = payload.new.contact_name || payload.new.name || payload.new.push_name || payload.new.sender_name;
              onNewMessage(msg, payload.new.phone, name);
           }
@@ -138,9 +155,6 @@ class RealtimeService {
       });
   }
 
-  /**
-   * Helper para transformar dados do banco no formato do App
-   */
   private mapPayloadToMessage(dbMsg: any): Message | null {
       if (!dbMsg) return null;
       
@@ -151,15 +165,12 @@ class RealtimeService {
         text: dbMsg.content || '',
         senderId: senderId,
         timestamp: new Date(dbMsg.created_at),
-        createdAtRaw: dbMsg.created_at, // Salva a string original
+        createdAtRaw: dbMsg.created_at,
         status: dbMsg.status || 'delivered',
         type: dbMsg.type || 'text'
       };
   }
 
-  /**
-   * Envia mensagem (Insere no banco para o n8n pegar)
-   */
   public async sendMessage(text: string, phone: string): Promise<void> {
     if (!this.supabase) throw new Error("Supabase não configurado");
 
