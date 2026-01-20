@@ -294,7 +294,11 @@ function App() {
 
       <main className="flex-1 flex overflow-hidden">
         {/* Passando ALL CONTACTS para o Dashboard para estatísticas reais */}
-        {currentView === 'dashboard' && <Dashboard conversations={conversations} contacts={allContacts} />}
+        {currentView === 'dashboard' && (
+          <div className="w-full h-full">
+            <Dashboard conversations={conversations} contacts={allContacts} />
+          </div>
+        )}
 
         {currentView === 'settings' && (
             <div className="w-full"><Settings config={config} onSave={handleSaveConfig} /></div>
