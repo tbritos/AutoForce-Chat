@@ -162,3 +162,23 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading
                             <span className="w-1.5 h-1.5 rounded-full bg-af-blue"></span>
                         </div>
                         <div>
+                            <span className="block text-gray-400 text-xs">Segmento</span>
+                            <span className="text-white font-medium">{cleanData(contact.segmento)}</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            
+            {/* Last Interaction */}
+            {contact.ultima_interacao && (
+                <div className="pt-4 border-t border-gray-800">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <Clock size={12} />
+                        <span>Última interação: {new Date(contact.ultima_interacao).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            )}
+        </div>
+    </div>
+  );
+};

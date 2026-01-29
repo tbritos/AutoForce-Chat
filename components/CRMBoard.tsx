@@ -37,11 +37,18 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
 
+    // Helper para limpar dados visuais (EMPTY/NULL)
+    const cleanData = (text?: string) => {
+        if (!text || text === 'EMPTY' || text === 'NULL') return null;
+        return text;
+    };
+
     // Extrair segmentos únicos
     const uniqueSegments = useMemo(() => {
         const segs = new Set<string>();
         contacts.forEach(c => {
-            if (c.segmento && c.segmento !== 'EMPTY') segs.add(c.segmento);
+            const s = cleanData(c.segmento);
+            if (s) segs.add(s);
         });
         return Array.from(segs).sort();
     }, [contacts]);
@@ -57,12 +64,6 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
         if (start && d < start) return false;
         if (end && d > end) return false;
         return true;
-    };
-
-    // Helper para limpar dados visuais
-    const cleanData = (text?: string) => {
-        if (!text || text === 'EMPTY' || text === 'NULL') return null;
-        return text;
     };
 
     // Lógica principal de distribuição dos cards
@@ -105,8 +106,9 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
             const statusLower = (contact.status || '').toLowerCase();
             
             // --- REGRA DE COLUNAS BASEADA ESTRITAMENTE NO STATUS ---
+            // A Temperatura (Quente/Frio) NÃO decide a coluna, apenas o Status decide.
 
-            // 1. MQL (Pronto para Vendas / Ganho)
+            // 1. MQL (Status de Sucesso/Avanço)
             if (
                 statusLower.includes('qualificado') ||
                 statusLower.includes('agendado') ||
@@ -118,7 +120,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
             ) {
                 columns.mql.push(contact);
             }
-            // 2. Descarte / Frio
+            // 2. Descarte / Frio (Status de Perda/Desqualificação)
             else if (
                 statusLower.includes('desqualificado') ||
                 statusLower.includes('perdido') || 
@@ -129,7 +131,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
             ) {
                 columns.frio.push(contact);
             }
-            // 3. Triagem (Em andamento)
+            // 3. Triagem (Em andamento / Conversando)
             else if (
                 statusLower.includes('atendimento') || 
                 statusLower.includes('andamento') ||
@@ -139,7 +141,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
             ) {
                 columns.triagem.push(contact);
             }
-            // 4. Fallback: Novos (Inclui 'Novo', 'EMPTY', 'NULL' ou vazios)
+            // 4. Fallback: Novos (Status 'Novo', vazio, 'EMPTY' ou 'NULL')
             else {
                 columns.novo.push(contact);
             }
@@ -289,7 +291,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                                                     </div>
                                                 )}
 
-                                                {/* Faixa Lateral baseada na TEMPERATURA */}
+                                                {/* Faixa Lateral baseada na TEMPERATURA (Apenas visual) */}
                                                 <div className={`absolute left-0 top-0 bottom-0 w-1 ${
                                                     (contact.temperatura || '').toLowerCase().includes('quente') ? 'bg-red-500' : 
                                                     (contact.temperatura || '').toLowerCase().includes('morno') ? 'bg-orange-400' : 
