@@ -13,6 +13,11 @@ export const ContactList: React.FC<ContactListProps> = ({ contacts }) => {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
+  const cleanData = (text?: string) => {
+      if (!text || text === 'EMPTY' || text === 'NULL') return null;
+      return text;
+  };
+
   const filteredContacts = contacts.filter(c => {
     // Filtro de Texto
     const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -121,46 +126,52 @@ export const ContactList: React.FC<ContactListProps> = ({ contacts }) => {
             </thead>
             <tbody className="divide-y divide-gray-800">
               {filteredContacts.length > 0 ? (
-                filteredContacts.map((contact) => (
-                  <tr key={contact.id} className="hover:bg-white/5 transition-colors group">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-xs font-bold text-white border border-gray-600">
-                           {contact.name.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-white">{contact.name}</p>
-                          <p className="text-xs text-af-blue font-mono">{formatPhone(contact.phone)}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="space-y-1">
-                        <p className="text-sm text-gray-300 font-medium flex items-center gap-1">
-                           <Building2 size={12} className="text-gray-500"/>
-                           {contact.empresa || <span className="text-gray-600 italic">Não informado</span>}
-                        </p>
-                        {contact.segmento && (
-                            <span className="inline-block text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">
-                                {contact.segmento}
-                            </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      {getTempBadge(contact.temperatura)}
-                    </td>
-                    <td className="p-4">
-                      <span className="text-sm text-gray-300">{contact.status || 'Novo'}</span>
-                    </td>
-                    <td className="p-4">
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <Calendar size={12} />
-                            {new Date(contact.created_at).toLocaleDateString()}
-                        </div>
-                    </td>
-                  </tr>
-                ))
+                filteredContacts.map((contact) => {
+                    const empresaClean = cleanData(contact.empresa);
+                    const segmentoClean = cleanData(contact.segmento);
+                    const statusClean = cleanData(contact.status);
+
+                    return (
+                        <tr key={contact.id} className="hover:bg-white/5 transition-colors group">
+                            <td className="p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-xs font-bold text-white border border-gray-600">
+                                {contact.name.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                <p className="text-sm font-bold text-white">{contact.name}</p>
+                                <p className="text-xs text-af-blue font-mono">{formatPhone(contact.phone)}</p>
+                                </div>
+                            </div>
+                            </td>
+                            <td className="p-4">
+                            <div className="space-y-1">
+                                <p className="text-sm text-gray-300 font-medium flex items-center gap-1">
+                                <Building2 size={12} className="text-gray-500"/>
+                                {empresaClean || <span className="text-gray-600 italic">Não informado</span>}
+                                </p>
+                                {segmentoClean && (
+                                    <span className="inline-block text-[10px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded border border-gray-700">
+                                        {segmentoClean}
+                                    </span>
+                                )}
+                            </div>
+                            </td>
+                            <td className="p-4">
+                            {getTempBadge(contact.temperatura)}
+                            </td>
+                            <td className="p-4">
+                            <span className="text-sm text-gray-300">{statusClean || 'Novo'}</span>
+                            </td>
+                            <td className="p-4">
+                                <div className="flex items-center gap-1 text-xs text-gray-500">
+                                    <Calendar size={12} />
+                                    {new Date(contact.created_at).toLocaleDateString()}
+                                </div>
+                            </td>
+                        </tr>
+                    );
+                })
               ) : (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-gray-500">

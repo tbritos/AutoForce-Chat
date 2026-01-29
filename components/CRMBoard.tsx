@@ -41,7 +41,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
     const uniqueSegments = useMemo(() => {
         const segs = new Set<string>();
         contacts.forEach(c => {
-            if (c.segmento) segs.add(c.segmento);
+            if (c.segmento && c.segmento !== 'EMPTY') segs.add(c.segmento);
         });
         return Array.from(segs).sort();
     }, [contacts]);
@@ -59,6 +59,12 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
         return true;
     };
 
+    // Helper para limpar dados visuais
+    const cleanData = (text?: string) => {
+        if (!text || text === 'EMPTY' || text === 'NULL') return null;
+        return text;
+    };
+
     // Lógica principal de distribuição dos cards
     const boardData = useMemo(() => {
         // Se o modo for SEGMENTO
@@ -72,8 +78,10 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                 if (searchTerm && !contact.name.toLowerCase().includes(searchTerm.toLowerCase()) && !contact.phone.includes(searchTerm)) return;
                 if (!filterByDate(contact)) return;
                 
-                if (contact.segmento && dynamicColumns[contact.segmento]) {
-                    dynamicColumns[contact.segmento].push(contact);
+                const seg = cleanData(contact.segmento);
+
+                if (seg && dynamicColumns[seg]) {
+                    dynamicColumns[seg].push(contact);
                 } else {
                     dynamicColumns['sem_segmento'].push(contact);
                 }
@@ -95,17 +103,43 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
             if (!filterByDate(contact)) return;
 
             const statusLower = (contact.status || '').toLowerCase();
-            const tempLower = (contact.temperatura || '').toLowerCase();
+            
+            // --- REGRA DE COLUNAS BASEADA ESTRITAMENTE NO STATUS ---
 
-            if (tempLower.includes('quente') || statusLower.includes('proposta') || statusLower.includes('ganho') || statusLower.includes('agendado')) {
+            // 1. MQL (Pronto para Vendas / Ganho)
+            if (
+                statusLower.includes('qualificado') ||
+                statusLower.includes('agendado') ||
+                statusLower.includes('reunião') ||
+                statusLower.includes('proposta') ||
+                statusLower.includes('ganho') || 
+                statusLower.includes('ganha') || 
+                statusLower.includes('fechamento')
+            ) {
                 columns.mql.push(contact);
-            } 
-            else if (tempLower.includes('frio') || statusLower.includes('perdi') || statusLower.includes('arquivado')) {
+            }
+            // 2. Descarte / Frio
+            else if (
+                statusLower.includes('desqualificado') ||
+                statusLower.includes('perdido') || 
+                statusLower.includes('perdi') || 
+                statusLower.includes('arquivado') ||
+                statusLower.includes('cancelado') ||
+                statusLower.includes('sem interesse')
+            ) {
                 columns.frio.push(contact);
             }
-            else if (statusLower.includes('atendimento') || tempLower.includes('morno') || contact.segmento || contact.cargo) {
+            // 3. Triagem (Em andamento)
+            else if (
+                statusLower.includes('atendimento') || 
+                statusLower.includes('andamento') ||
+                statusLower.includes('validando') ||
+                statusLower.includes('contato') ||
+                statusLower.includes('respondeu')
+            ) {
                 columns.triagem.push(contact);
             }
+            // 4. Fallback: Novos (Inclui 'Novo', 'EMPTY', 'NULL' ou vazios)
             else {
                 columns.novo.push(contact);
             }
@@ -152,7 +186,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                     </h1>
                     <p className="text-xs text-af-gray-200">
                         {viewMode === 'status' 
-                            ? 'Acompanhe a triagem da IA até a entrega para vendas.'
+                            ? 'Organizado pelo STATUS do lead.'
                             : 'Visualização agrupada por vertical de mercado.'}
                     </p>
                 </div>
@@ -166,14 +200,14 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all ${viewMode === 'status' ? 'bg-af-blue text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
                             >
                                 <Columns size={14} />
-                                Processo
+                                Status
                             </button>
                             <button 
                                 onClick={() => setViewMode('segment')}
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-bold transition-all ${viewMode === 'segment' ? 'bg-af-blue text-white shadow-md' : 'text-gray-400 hover:text-white'}`}
                             >
                                 <LayoutList size={14} />
-                                Por Segmento
+                                Segmento
                             </button>
                         </div>
 
@@ -241,62 +275,69 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                                         </div>
                                     </div>
                                 ) : (
-                                    boardData[col.id]?.map(contact => (
-                                        <div key={contact.id} className="bg-[#1E2028] p-4 rounded-lg border border-gray-700 hover:border-af-blue/50 transition-all shadow-sm group cursor-pointer relative overflow-hidden">
-                                            
-                                            {col.id === 'mql' && (
-                                                <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] px-2 py-0.5 rounded-bl-lg font-bold">
-                                                    READY
-                                                </div>
-                                            )}
+                                    boardData[col.id]?.map(contact => {
+                                        const empresaClean = cleanData(contact.empresa);
+                                        const segmentoClean = cleanData(contact.segmento);
 
-                                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${
-                                                (contact.temperatura || '').toLowerCase().includes('quente') ? 'bg-red-500' : 
-                                                (contact.temperatura || '').toLowerCase().includes('morno') ? 'bg-orange-400' : 
-                                                (contact.temperatura || '').toLowerCase().includes('frio') ? 'bg-blue-300' : 'bg-gray-600'
-                                            }`} />
-
-                                            <div className="pl-2">
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <h4 className="font-bold text-white text-sm truncate pr-2">{contact.name}</h4>
-                                                    {getTempIcon(contact.temperatura)}
-                                                </div>
+                                        return (
+                                            <div key={contact.id} className="bg-[#1E2028] p-4 rounded-lg border border-gray-700 hover:border-af-blue/50 transition-all shadow-sm group cursor-pointer relative overflow-hidden">
                                                 
-                                                {contact.empresa && (
-                                                    <p className="text-xs text-gray-300 font-medium truncate mb-1">{contact.empresa}</p>
+                                                {/* Badge READY se for MQL */}
+                                                {col.id === 'mql' && (
+                                                    <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] px-2 py-0.5 rounded-bl-lg font-bold">
+                                                        READY
+                                                    </div>
                                                 )}
 
-                                                <p className="text-[10px] text-af-blue font-mono mb-3">{formatPhone(contact.phone)}</p>
-                                                
-                                                <div className="flex flex-wrap gap-2 mt-2">
-                                                    {contact.segmento ? (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-af-blue/10 text-af-blue border border-af-blue/20">
-                                                            <Building2 size={10} />
-                                                            {contact.segmento}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-gray-800 text-gray-500 border border-gray-700 border-dashed">
-                                                            Sem Segmento
-                                                        </span>
+                                                {/* Faixa Lateral baseada na TEMPERATURA */}
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                                                    (contact.temperatura || '').toLowerCase().includes('quente') ? 'bg-red-500' : 
+                                                    (contact.temperatura || '').toLowerCase().includes('morno') ? 'bg-orange-400' : 
+                                                    (contact.temperatura || '').toLowerCase().includes('frio') ? 'bg-blue-300' : 'bg-gray-600'
+                                                }`} />
+
+                                                <div className="pl-2">
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <h4 className="font-bold text-white text-sm truncate pr-2">{contact.name}</h4>
+                                                        {getTempIcon(contact.temperatura)}
+                                                    </div>
+                                                    
+                                                    {empresaClean && (
+                                                        <p className="text-xs text-gray-300 font-medium truncate mb-1">{empresaClean}</p>
                                                     )}
-                                                </div>
-                                                <div className="mt-3 pt-3 border-t border-gray-700 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <span className="text-[10px] text-gray-500">
-                                                        {new Date(contact.created_at).toLocaleDateString()}
-                                                    </span>
-                                                    {contact.pipedrive_id ? (
-                                                        <span className="text-[10px] text-green-400 flex items-center gap-1">
-                                                            <CheckCircle2 size={10} /> Enviado
+
+                                                    <p className="text-[10px] text-af-blue font-mono mb-3">{formatPhone(contact.phone)}</p>
+                                                    
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        {segmentoClean ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-af-blue/10 text-af-blue border border-af-blue/20">
+                                                                <Building2 size={10} />
+                                                                {segmentoClean}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-gray-800 text-gray-500 border border-gray-700 border-dashed">
+                                                                Sem Segmento
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="mt-3 pt-3 border-t border-gray-700 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <span className="text-[10px] text-gray-500">
+                                                            {new Date(contact.created_at).toLocaleDateString()}
                                                         </span>
-                                                    ) : (
-                                                        <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                                                            <ArrowRightCircle size={10} /> Ver Chat
-                                                        </span>
-                                                    )}
+                                                        {contact.pipedrive_id ? (
+                                                            <span className="text-[10px] text-green-400 flex items-center gap-1">
+                                                                <CheckCircle2 size={10} /> Enviado
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                                                <ArrowRightCircle size={10} /> Ver Chat
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>

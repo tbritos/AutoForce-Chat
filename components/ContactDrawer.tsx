@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Contact } from '../types';
 import { 
@@ -22,6 +23,12 @@ interface ContactDrawerProps {
 
 export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading, phone, name }) => {
     
+  // Helper para limpar dados visuais
+  const cleanData = (text?: string) => {
+    if (!text || text === 'EMPTY' || text === 'NULL') return '-';
+    return text;
+  };
+
   // Renderização de Estado Vazio ou Carregando
   if (isLoading) {
       return (
@@ -118,13 +125,13 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading
             <div className="grid grid-cols-2 gap-3">
                 <div className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 ${getTemperatureColor(contact.temperatura)}`}>
                     {getTemperatureIcon(contact.temperatura)}
-                    <span className="text-xs font-bold uppercase">{contact.temperatura || 'N/A'}</span>
+                    <span className="text-xs font-bold uppercase">{cleanData(contact.temperatura) || 'N/A'}</span>
                     <span className="text-[9px] opacity-70">Temperatura</span>
                 </div>
                 
                 <div className="p-3 rounded-lg border border-gray-700 bg-[#1E2028] flex flex-col items-center justify-center gap-1 text-green-400">
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span className="text-xs font-bold uppercase text-center truncate w-full">{contact.status || 'Novo'}</span>
+                    <span className="text-xs font-bold uppercase text-center truncate w-full">{cleanData(contact.status) || 'Novo'}</span>
                     <span className="text-[9px] text-gray-500">Status</span>
                 </div>
             </div>
@@ -140,14 +147,14 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading
                         <Building2 size={16} className="text-gray-500 mt-0.5" />
                         <div>
                             <span className="block text-gray-400 text-xs">Empresa</span>
-                            <span className="text-white font-medium">{contact.empresa || '-'}</span>
+                            <span className="text-white font-medium">{cleanData(contact.empresa)}</span>
                         </div>
                     </li>
                     <li className="flex items-start gap-3 text-sm">
                         <Tag size={16} className="text-gray-500 mt-0.5" />
                         <div>
                             <span className="block text-gray-400 text-xs">Cargo</span>
-                            <span className="text-white font-medium">{contact.cargo || '-'}</span>
+                            <span className="text-white font-medium">{cleanData(contact.cargo)}</span>
                         </div>
                     </li>
                     <li className="flex items-start gap-3 text-sm">
@@ -155,23 +162,3 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading
                             <span className="w-1.5 h-1.5 rounded-full bg-af-blue"></span>
                         </div>
                         <div>
-                            <span className="block text-gray-400 text-xs">Segmento</span>
-                            <span className="text-white font-medium">{contact.segmento || '-'}</span>
-                        </div>
-                    </li>
-                </ul>
-            </div>
-            
-            {/* Last Interaction */}
-            {contact.ultima_interacao && (
-                <div className="pt-4 border-t border-gray-800">
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Clock size={12} />
-                        <span>Última interação: {new Date(contact.ultima_interacao).toLocaleDateString()}</span>
-                    </div>
-                </div>
-            )}
-        </div>
-    </div>
-  );
-};
