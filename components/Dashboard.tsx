@@ -46,17 +46,55 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
     const currentConversations = filteredData.conversations;
 
     let mqlCount = 0;
+    let descarteCount = 0;
+    let triagemCount = 0;
     
-    // --- 1. Dados de Segmentação (CRM) ---
+    // --- 1. Processamento de Segmentos e Status ---
     const segmentMap = new Map<string, number>();
+    
     currentContacts.forEach(c => {
+        // Mapa de Segmentos
         const seg = c.segmento || 'Não Identificado';
         segmentMap.set(seg, (segmentMap.get(seg) || 0) + 1);
 
-        // Contagem de MQLs (Temperatura Quente)
-        if (c.temperatura?.toLowerCase().includes('quente')) {
+        // --- LÓGICA DE CONTAGEM BASEADA NO STATUS (Igual ao CRMBoard) ---
+        const statusLower = (c.status || '').toLowerCase();
+
+        // 1. Descarte (Verificar primeiro por causa de 'desqualificado')
+        if (
+            statusLower.includes('desqualificado') ||
+            statusLower.includes('perdido') || 
+            statusLower.includes('perdi') || 
+            statusLower.includes('arquivado') ||
+            statusLower.includes('cancelado') ||
+            statusLower.includes('sem interesse') ||
+            statusLower.includes('frio')
+        ) {
+            descarteCount++;
+        }
+        // 2. MQL (Sucesso)
+        else if (
+            statusLower.includes('qualificado') ||
+            statusLower.includes('agendado') ||
+            statusLower.includes('reunião') ||
+            statusLower.includes('proposta') ||
+            statusLower.includes('ganho') || 
+            statusLower.includes('ganha') || 
+            statusLower.includes('fechamento')
+        ) {
             mqlCount++;
         }
+        // 3. Triagem
+        else if (
+            statusLower.includes('atendimento') || 
+            statusLower.includes('andamento') ||
+            statusLower.includes('validando') ||
+            statusLower.includes('contato') ||
+            statusLower.includes('respondeu')
+        ) {
+            triagemCount++;
+        }
+        // O restante é considerado 'Novo' e não entra nessas somas específicas de funil avançado
     });
     
     const COLORS = ['#1440FF', '#FFA814', '#00C49F', '#FF8042', '#8A92B7', '#FF1440'];
@@ -68,12 +106,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
         }))
         .sort((a, b) => b.value - a.value);
 
-    // --- 2. Dados de Qualificação (Funil) ---
+    // --- 2. Dados de Qualificação (Funil Visual) ---
     const funnelData = [
         { name: 'Total Leads', value: currentContacts.length, fill: '#3b82f6' },
-        { name: 'Em Triagem', value: currentContacts.filter(c => !c.temperatura || c.temperatura === 'Morno').length, fill: '#f59e0b' },
-        { name: 'MQLs (Quente)', value: mqlCount, fill: '#10b981' },
-        { name: 'Descarte', value: currentContacts.filter(c => c.temperatura === 'Frio').length, fill: '#ef4444' }
+        { name: 'Em Triagem', value: triagemCount, fill: '#f59e0b' },
+        { name: 'MQLs (Ganho)', value: mqlCount, fill: '#10b981' },
+        { name: 'Descarte', value: descarteCount, fill: '#ef4444' }
     ];
 
     // --- 3. Mensagens (Volume de Atendimento) ---
@@ -93,6 +131,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
     return {
         totalLeads: currentContacts.length,
         mqlCount,
+        // Taxa de conversão baseada em MQLs sobre Total
         conversionRate: currentContacts.length > 0 ? ((mqlCount / currentContacts.length) * 100).toFixed(1) : '0',
         segmentChartData,
         funnelData,
