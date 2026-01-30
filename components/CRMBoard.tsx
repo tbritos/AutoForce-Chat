@@ -106,11 +106,24 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
             const statusLower = (contact.status || '').toLowerCase();
             
             // --- REGRA DE COLUNAS BASEADA ESTRITAMENTE NO STATUS ---
-            // A Temperatura (Quente/Frio) NÃO decide a coluna, apenas o Status decide.
+            // IMPORTANTE: A ordem importa. 'Desqualificado' deve ser checado ANTES de 'Qualificado'
+            // pois a string "desqualificado" contém a substring "qualificado".
 
-            // 1. MQL (Status de Sucesso/Avanço)
+            // 1. Descarte / Frio (Status de Perda/Desqualificação)
             if (
-                statusLower.includes('qualificado') ||
+                statusLower.includes('desqualificado') ||
+                statusLower.includes('perdido') || 
+                statusLower.includes('perdi') || 
+                statusLower.includes('arquivado') ||
+                statusLower.includes('cancelado') ||
+                statusLower.includes('sem interesse') ||
+                statusLower.includes('frio') // Caso o status venha erroneamente com o nome da temperatura
+            ) {
+                columns.frio.push(contact);
+            }
+            // 2. MQL (Status de Sucesso/Avanço)
+            else if (
+                statusLower.includes('qualificado') || // Agora seguro, pois 'desqualificado' já caiu no if acima
                 statusLower.includes('agendado') ||
                 statusLower.includes('reunião') ||
                 statusLower.includes('proposta') ||
@@ -119,17 +132,6 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                 statusLower.includes('fechamento')
             ) {
                 columns.mql.push(contact);
-            }
-            // 2. Descarte / Frio (Status de Perda/Desqualificação)
-            else if (
-                statusLower.includes('desqualificado') ||
-                statusLower.includes('perdido') || 
-                statusLower.includes('perdi') || 
-                statusLower.includes('arquivado') ||
-                statusLower.includes('cancelado') ||
-                statusLower.includes('sem interesse')
-            ) {
-                columns.frio.push(contact);
             }
             // 3. Triagem (Em andamento / Conversando)
             else if (
