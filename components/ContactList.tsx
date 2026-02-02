@@ -19,10 +19,14 @@ export const ContactList: React.FC<ContactListProps> = ({ contacts }) => {
   };
 
   const filteredContacts = contacts.filter(c => {
-    // Filtro de Texto
-    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          c.phone.includes(searchTerm) ||
-                          (c.empresa && c.empresa.toLowerCase().includes(searchTerm.toLowerCase()));
+    // Filtro de Texto Seguro
+    const nameSafe = c.name || '';
+    const phoneSafe = c.phone || '';
+    const empresaSafe = c.empresa || '';
+
+    const matchesSearch = nameSafe.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          phoneSafe.includes(searchTerm) ||
+                          empresaSafe.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Filtro de Data
     let matchesDate = true;
@@ -130,16 +134,17 @@ export const ContactList: React.FC<ContactListProps> = ({ contacts }) => {
                     const empresaClean = cleanData(contact.empresa);
                     const segmentoClean = cleanData(contact.segmento);
                     const statusClean = cleanData(contact.status);
+                    const safeName = contact.name || 'Sem Nome';
 
                     return (
                         <tr key={contact.id} className="hover:bg-white/5 transition-colors group">
                             <td className="p-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-xs font-bold text-white border border-gray-600">
-                                {contact.name.substring(0, 2).toUpperCase()}
+                                {safeName.substring(0, 2).toUpperCase()}
                                 </div>
                                 <div>
-                                <p className="text-sm font-bold text-white">{contact.name}</p>
+                                <p className="text-sm font-bold text-white">{safeName}</p>
                                 <p className="text-xs text-af-blue font-mono">{formatPhone(contact.phone)}</p>
                                 </div>
                             </div>

@@ -29,6 +29,9 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading
     return text;
   };
 
+  // Helper para garantir string segura
+  const safeString = (str?: string) => str || '';
+
   // Renderização de Estado Vazio ou Carregando
   if (isLoading) {
       return (
@@ -45,9 +48,9 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading
         <div className="w-80 bg-af-black border-l border-gray-800 p-6 h-full overflow-y-auto">
             <div className="text-center mb-8">
                 <div className="w-20 h-20 bg-gray-800 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold text-gray-500">
-                    {name.substring(0, 2).toUpperCase()}
+                    {safeString(name).substring(0, 2).toUpperCase()}
                 </div>
-                <h2 className="text-xl font-bold text-white font-heading">{name}</h2>
+                <h2 className="text-xl font-bold text-white font-heading">{name || 'Sem Nome'}</h2>
                 <p className="text-af-blue text-sm mt-1">{formatPhone(phone)}</p>
             </div>
             
@@ -82,14 +85,14 @@ export const ContactDrawer: React.FC<ContactDrawerProps> = ({ contact, isLoading
         <div className="p-6 border-b border-gray-800 text-center relative overflow-hidden">
              {/* Background glow based on temperature */}
              <div className={`absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none 
-                ${contact.temperatura?.toLowerCase().includes('quente') ? 'bg-red-600' : 'bg-blue-600'}`} 
+                ${(contact.temperatura || '').toLowerCase().includes('quente') ? 'bg-red-600' : 'bg-blue-600'}`} 
              />
 
             <div className="relative z-10">
                 <div className="w-24 h-24 bg-gradient-to-br from-gray-700 to-gray-900 rounded-full mx-auto mb-4 flex items-center justify-center text-3xl font-bold text-white border-4 border-af-black shadow-xl">
-                    {contact.name.substring(0, 2).toUpperCase()}
+                    {safeString(contact.name).substring(0, 2).toUpperCase()}
                 </div>
-                <h2 className="text-xl font-bold text-white font-heading leading-tight">{contact.name}</h2>
+                <h2 className="text-xl font-bold text-white font-heading leading-tight">{contact.name || 'Sem Nome'}</h2>
                 <p className="text-af-blue font-mono text-sm mt-1 mb-3">{formatPhone(contact.phone)}</p>
                 
                 {/* Pipedrive / CRM Link */}

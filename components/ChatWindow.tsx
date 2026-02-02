@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { Send, Paperclip, MoreVertical, Smile, Check, CheckCheck } from 'lucide-react';
 import { Conversation } from '../types';
@@ -38,6 +39,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
     return text.trim().toLowerCase() === 'menu';
   };
 
+  const safeContactName = conversation.contactName || 'Desconhecido';
+
   return (
     <div className="flex flex-col h-full bg-[#05060A] relative">
       {/* Background Pattern - Subtle Race Track / Technical Lines */}
@@ -53,12 +56,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
         <div className="flex items-center space-x-4">
           <div className="relative">
              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold border border-gray-600">
-                {conversation.contactName.substring(0, 2).toUpperCase()}
+                {safeContactName.substring(0, 2).toUpperCase()}
              </div>
              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-af-black"></span>
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white font-heading">{conversation.contactName}</h2>
+            <h2 className="text-lg font-bold text-white font-heading">{safeContactName}</h2>
             <div className="flex items-center gap-2">
                 <span className="text-sm text-af-gray-200">{formatPhone(conversation.contactPhone)}</span>
                 {conversation.tags.map(tag => (

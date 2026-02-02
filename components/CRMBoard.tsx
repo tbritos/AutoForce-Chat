@@ -76,7 +76,10 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
 
             contacts.forEach(contact => {
                 // Filtros (Busca e Data)
-                if (searchTerm && !contact.name.toLowerCase().includes(searchTerm.toLowerCase()) && !contact.phone.includes(searchTerm)) return;
+                const safeName = contact.name || '';
+                const safePhone = contact.phone || '';
+
+                if (searchTerm && !safeName.toLowerCase().includes(searchTerm.toLowerCase()) && !safePhone.includes(searchTerm)) return;
                 if (!filterByDate(contact)) return;
                 
                 const seg = cleanData(contact.segmento);
@@ -100,7 +103,10 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
 
         contacts.forEach(contact => {
             // Filtros (Busca e Data)
-            if (searchTerm && !contact.name.toLowerCase().includes(searchTerm.toLowerCase()) && !contact.phone.includes(searchTerm)) return;
+            const safeName = contact.name || '';
+            const safePhone = contact.phone || '';
+            
+            if (searchTerm && !safeName.toLowerCase().includes(searchTerm.toLowerCase()) && !safePhone.includes(searchTerm)) return;
             if (!filterByDate(contact)) return;
 
             const statusLower = (contact.status || '').toLowerCase();
@@ -282,6 +288,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
                                     boardData[col.id]?.map(contact => {
                                         const empresaClean = cleanData(contact.empresa);
                                         const segmentoClean = cleanData(contact.segmento);
+                                        const safeName = contact.name || 'Sem Nome';
 
                                         return (
                                             <div key={contact.id} className="bg-[#1E2028] p-4 rounded-lg border border-gray-700 hover:border-af-blue/50 transition-all shadow-sm group cursor-pointer relative overflow-hidden">
@@ -302,7 +309,7 @@ export const CRMBoard: React.FC<CRMBoardProps> = ({ contacts }) => {
 
                                                 <div className="pl-2">
                                                     <div className="flex justify-between items-start mb-1">
-                                                        <h4 className="font-bold text-white text-sm truncate pr-2">{contact.name}</h4>
+                                                        <h4 className="font-bold text-white text-sm truncate pr-2">{safeName}</h4>
                                                         {getTempIcon(contact.temperatura)}
                                                     </div>
                                                     
