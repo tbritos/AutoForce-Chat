@@ -2,18 +2,18 @@
 import React, { useState } from 'react';
 import { Logo } from './Logo';
 import { realtimeService } from '../services/socket';
-import { AlertCircle, Lock } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
     const handleGoogleLogin = async () => {
         try {
             setIsLoading(true);
             setError(null);
             await realtimeService.signInWithGoogle();
-            // O redirecionamento é automático pelo Supabase
         } catch (err: any) {
             console.error(err);
             setError(err.message || 'Falha ao conectar com Google');
@@ -21,31 +21,49 @@ export const Login: React.FC = () => {
         }
     };
 
-    return (
-        <div className="min-h-screen bg-[#00020A] flex flex-col items-center justify-center p-4 relative overflow-hidden">
-            
-            {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-af-blue/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
-                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-af-blue/5 rounded-full blur-3xl -ml-32 -mb-32"></div>
-                
-                {/* Grid Pattern */}
-                <div className="absolute inset-0 opacity-10" 
-                    style={{ 
-                        backgroundImage: 'linear-gradient(rgba(20, 64, 255, 0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(20, 64, 255, 0.3) 1px, transparent 1px)', 
-                        backgroundSize: '40px 40px' 
-                    }} 
-                />
-            </div>
+    const handleMouseMove = (e: React.MouseEvent) => {
+        setMousePosition({ x: e.clientX, y: e.clientY });
+    };
 
-            <div className="bg-[#0A0C14] border border-gray-800 rounded-2xl p-8 md:p-12 w-full max-w-md shadow-2xl relative z-10 flex flex-col items-center">
-                <div className="mb-8 transform hover:scale-105 transition-transform duration-300">
+    return (
+        <div 
+            onMouseMove={handleMouseMove}
+            className="min-h-screen bg-[#00020A] flex flex-col items-center justify-center p-4 relative overflow-hidden"
+        >
+            
+            {/* --- BACKGROUND INTERATIVO --- */}
+            
+            {/* 1. Grid Pattern Estático (Fundo Técnico) */}
+            <div className="absolute inset-0 opacity-[0.07]" 
+                style={{ 
+                    backgroundImage: 'linear-gradient(#1440FF 1px, transparent 1px), linear-gradient(90deg, #1440FF 1px, transparent 1px)', 
+                    backgroundSize: '50px 50px' 
+                }} 
+            />
+
+            {/* 2. Spotlight Dinâmico (Segue o Mouse) */}
+            <div 
+                className="absolute inset-0 pointer-events-none transition-opacity duration-300"
+                style={{
+                    background: `radial-gradient(800px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(20, 64, 255, 0.15), transparent 40%)`,
+                }}
+            />
+
+            {/* 3. Blurs Decorativos Fixos (Ambiente) */}
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-af-blue/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-af-blue/5 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none"></div>
+
+
+            {/* --- CARD DE LOGIN --- */}
+            <div className="bg-[#0A0C14]/80 backdrop-blur-md border border-gray-800/50 rounded-2xl p-8 md:p-12 w-full max-w-md shadow-2xl relative z-10 flex flex-col items-center group hover:border-af-blue/30 transition-all duration-500">
+                
+                <div className="mb-8 transform group-hover:scale-105 transition-transform duration-300">
                     <Logo className="h-10" />
                 </div>
 
                 <div className="text-center mb-8">
                     <h1 className="text-2xl font-bold text-white font-heading mb-2">Bem-vindo ao Monitor</h1>
-                    <p className="text-af-gray-200 text-sm">Acesse o painel de controle da sua Inteligência Artificial.</p>
+                    <p className="text-af-gray-200 text-sm">Acesse o painel de controle da <strong className="text-white">Lara</strong></p>
                 </div>
 
                 {error && (
@@ -58,8 +76,11 @@ export const Login: React.FC = () => {
                 <button
                     onClick={handleGoogleLogin}
                     disabled={isLoading}
-                    className="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed group"
+                    className="w-full bg-white hover:bg-gray-100 text-gray-900 font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed group relative overflow-hidden"
                 >
+                    {/* Efeito de brilho no botão */}
+                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+
                     {isLoading ? (
                         <div className="w-5 h-5 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
                     ) : (
@@ -82,19 +103,16 @@ export const Login: React.FC = () => {
                                     fill="#EA4335"
                                 />
                             </svg>
-                            <span>Entrar com Google</span>
+                            <span className="relative z-10">Entrar com Google</span>
                         </>
                     )}
                 </button>
-
-                <div className="mt-8 flex items-center justify-center gap-1 text-xs text-gray-500">
-                    <Lock size={12} />
-                    <span>Acesso seguro via Supabase Auth</span>
-                </div>
             </div>
 
-            <div className="absolute bottom-4 text-center">
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest">AutoForce Tecnologia &copy; {new Date().getFullYear()}</p>
+            <div className="absolute bottom-6 text-center z-10">
+                <p className="text-[11px] text-gray-500 font-medium tracking-widest opacity-60 hover:opacity-100 transition-opacity">
+                    Desenvolvido por Tallys
+                </p>
             </div>
         </div>
     );
