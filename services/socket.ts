@@ -1,8 +1,10 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
 import { Message, Contact } from '../types';
 
 // Atualizado para aceitar opcionalmente o contactName
 type MessageCallback = (msg: Message, phone: string, contactName?: string) => void;
+type StatusCallback = (status: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING') => void;
 
 class RealtimeService {
   private supabase: SupabaseClient | null = null;
@@ -20,7 +22,10 @@ class RealtimeService {
     
     // Se já estiver inicializado com as mesmas configs, ignora
     if (this.supabase) {
-        this.disconnect();
+       // Não desconectamos aqui para não perder a sessão de auth se for um re-render
+       // Apenas atualizamos se a URL mudou drasticamente (raro)
+       this.isConnected = true;
+       return;
     }
 
     try {
@@ -31,6 +36,42 @@ class RealtimeService {
         console.error('Supabase Service: Erro ao inicializar', e);
         this.isConnected = false;
     }
+  }
+
+  /**
+   * AUTENTICAÇÃO
+   */
+
+  public async signInWithGoogle() {
+      if (!this.supabase) throw new Error("Supabase não inicializado");
+      
+      const { data, error } = await this.supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+              redirectTo: window.location.origin // Redireciona para a própria página
+          }
+      });
+      
+      if (error) throw error;
+      return data;
+  }
+
+  public async signOut() {
+      if (!this.supabase) return;
+      await this.supabase.auth.signOut();
+  }
+
+  public async getSession(): Promise<Session | null> {
+      if (!this.supabase) return null;
+      const { data } = await this.supabase.auth.getSession();
+      return data.session;
+  }
+
+  public onAuthStateChange(callback: (session: Session | null) => void) {
+      if (!this.supabase) return;
+      return this.supabase.auth.onAuthStateChange((_event, session) => {
+          callback(session);
+      });
   }
 
   /**
@@ -137,13 +178,19 @@ class RealtimeService {
   /**
    * Conecta ao canal Realtime do Supabase
    */
-  public connect(onNewMessage: MessageCallback, onUpdateMessage: MessageCallback) {
+  public connect(
+      onNewMessage: MessageCallback, 
+      onUpdateMessage: MessageCallback,
+      onStatusChange?: StatusCallback
+  ) {
     if (!this.supabase || !this.isConnected) {
         console.warn('Supabase Service: Tentativa de conectar sem inicializar (Verifique as Configurações)');
+        if (onStatusChange) onStatusChange('DISCONNECTED');
         return;
     }
 
     console.log('Iniciando conexão Realtime com Supabase...');
+    if (onStatusChange) onStatusChange('CONNECTING');
     
     if (this.subscription) {
       this.supabase.removeChannel(this.subscription);
@@ -178,6 +225,10 @@ class RealtimeService {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('Monitorando tabela "messages" em tempo real!');
+          if (onStatusChange) onStatusChange('CONNECTED');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          console.warn('Conexão Realtime perdida:', status);
+          if (onStatusChange) onStatusChange('DISCONNECTED');
         }
       });
   }

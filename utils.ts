@@ -1,3 +1,4 @@
+
 /**
  * Formata números de telefone para o padrão visual (ex: +55 (11) 99999-9999)
  */
@@ -27,4 +28,34 @@ export const formatPhone = (phone: string | undefined | null): string => {
 
   // Se não bater com o padrão (ex: número internacional sem 55 ou curto), retorna original
   return phone;
+};
+
+/**
+ * Toca um som sutil de notificação para novas mensagens
+ */
+export const playNotificationSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    // Configuração do tom (Bip suave e moderno)
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.1); // Slide para C6
+    
+    gain.gain.setValueAtTime(0.05, ctx.currentTime); // Volume baixo
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch (error) {
+    console.error("Erro ao tocar som:", error);
+  }
 };

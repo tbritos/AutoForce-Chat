@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   LayoutDashboard, 
@@ -11,13 +12,15 @@ import {
 } from 'lucide-react';
 import { ViewState } from '../types';
 import { Logo } from './Logo';
+import { realtimeService } from '../services/socket';
 
 interface SidebarProps {
   currentView: ViewState;
   onChangeView: (view: ViewState) => void;
+  connectionStatus: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING';
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, connectionStatus }) => {
   
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -25,6 +28,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     { id: 'crm', icon: Kanban, label: 'Esteira MQL' },
     { id: 'history', icon: Users, label: 'Base de Leads' },
   ];
+
+  const handleLogout = async () => {
+      try {
+          await realtimeService.signOut();
+          // O estado em App.tsx será atualizado via onAuthStateChange
+      } catch (error) {
+          console.error("Erro ao sair:", error);
+      }
+  };
+
+  // Cores do indicador baseado no status real
+  const getStatusColor = () => {
+      switch (connectionStatus) {
+          case 'CONNECTED': return 'bg-green-500';
+          case 'CONNECTING': return 'bg-yellow-500';
+          case 'DISCONNECTED': return 'bg-red-500';
+          default: return 'bg-gray-500';
+      }
+  };
+  
+  const getStatusText = () => {
+      switch (connectionStatus) {
+          case 'CONNECTED': return 'Online (Supabase)';
+          case 'CONNECTING': return 'Conectando...';
+          case 'DISCONNECTED': return 'Desconectado';
+          default: return 'Offline';
+      }
+  };
 
   return (
     <div className="w-64 bg-af-black border-r border-gray-800 flex flex-col h-full shrink-0">
@@ -80,10 +111,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
                 </div>
                 <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      {connectionStatus === 'CONNECTED' && (
+                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${getStatusColor().replace('bg-', 'bg-')}`}></span>
+                      )}
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${getStatusColor()}`}></span>
                     </span>
-                    <span className="text-xs text-af-gray-200">n8n Conectado</span>
+                    <span className="text-xs text-af-gray-200">{getStatusText()}</span>
                 </div>
              </div>
           </nav>
@@ -91,7 +124,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
       </div>
 
       <div className="p-4 border-t border-gray-800">
-        <button className="w-full flex items-center px-3 py-2 text-sm font-medium text-af-gray-200 hover:text-white transition-colors">
+        <button 
+            onClick={handleLogout}
+            className="w-full flex items-center px-3 py-2 text-sm font-medium text-af-gray-200 hover:text-white transition-colors"
+        >
           <LogOut className="mr-3 h-5 w-5" />
           Sair
         </button>

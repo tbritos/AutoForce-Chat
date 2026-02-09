@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -5,12 +6,13 @@ import { ConversationList } from './components/ConversationList';
 import { ChatWindow } from './components/ChatWindow';
 import { ContactDrawer } from './components/ContactDrawer';
 import { CRMBoard } from './components/CRMBoard';
-import { ContactList } from './components/ContactList'; // Novo Componente
+import { ContactList } from './components/ContactList'; 
 import { Settings } from './components/Settings';
+import { Login } from './components/Login';
 import { MOCK_CONVERSATIONS, DEFAULT_SUPABASE_CONFIG } from './constants';
 import { Conversation, ViewState, Message, SystemConfig, Contact } from './types';
 import { realtimeService } from './services/socket';
-import { formatPhone } from './utils';
+import { formatPhone, playNotificationSound } from './utils';
 
 const STORAGE_KEY = 'autoforce_monitor_config';
 
@@ -19,9 +21,16 @@ function App() {
   const [conversations, setConversations] = useState<Conversation[]>(MOCK_CONVERSATIONS);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   
+  // Auth State
+  const [session, setSession] = useState<any>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  // Connection State
+  const [connectionStatus, setConnectionStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'CONNECTING'>('DISCONNECTED');
+
   // CRM States
-  const [allContacts, setAllContacts] = useState<Contact[]>([]); // Lista completa para Kanban/Dash
-  const [activeContact, setActiveContact] = useState<Contact | null>(null); // Contato ativo no chat
+  const [allContacts, setAllContacts] = useState<Contact[]>([]); 
+  const [activeContact, setActiveContact] = useState<Contact | null>(null); 
   const [isLoadingContact, setIsLoadingContact] = useState(false);
   
   const activeConversationIdRef = useRef(activeConversationId);
@@ -33,11 +42,15 @@ function App() {
 
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
+    // Reseta o título da página quando abre uma conversa
+    if (activeConversationId) {
+        document.title = "AutoForce Monitor";
+    }
   }, [activeConversationId]);
 
-  // Carregar todos os contatos (CRM) quando configurado
+  // Carregar todos os contatos (CRM) quando configurado E LOGADO
   const loadCRMData = async () => {
-     if (isConfigured) {
+     if (isConfigured && session) {
          const contacts = await realtimeService.fetchAllContacts();
          setAllContacts(contacts);
      }
@@ -45,12 +58,12 @@ function App() {
 
   useEffect(() => {
       loadCRMData();
-  }, [isConfigured]);
+  }, [isConfigured, session]);
 
   // Efeito OTIMIZADO para carregar contato individual usando Cache
   useEffect(() => {
       const fetchIndividualContact = async () => {
-          if (!activeConversationId || !isConfigured) {
+          if (!activeConversationId || !isConfigured || !session) {
               setActiveContact(null);
               return;
           }
@@ -58,16 +71,13 @@ function App() {
           const conv = conversations.find(c => c.id === activeConversationId);
           if (conv) {
               setIsLoadingContact(true);
-              // O service agora possui um cache interno inteligente.
-              // Se o dado já existir (veio do loadCRMData ou de navegação anterior),
-              // ele retorna instantaneamente sem bater na API.
               const contactData = await realtimeService.fetchContactByPhone(conv.contactPhone);
               setActiveContact(contactData);
               setIsLoadingContact(false);
           }
       };
       fetchIndividualContact();
-  }, [activeConversationId, isConfigured]); // Removido 'allContacts' da dependência pois o service gerencia o cache
+  }, [activeConversationId, isConfigured, session]);
 
   // Helper de ordenação
   const sortMessages = (msgs: Message[]) => {
@@ -79,26 +89,59 @@ function App() {
       });
   };
 
-  // Inicialização
+  // Inicialização do Sistema e Auth
   useEffect(() => {
     const initSystem = async (url: string, key: string) => {
         setConfig({ supabaseUrl: url, supabaseKey: key });
         setIsConfigured(true);
         realtimeService.initialize(url, key);
-        await loadHistory();
+        
+        // Verificar sessão Auth
+        try {
+            const currentSession = await realtimeService.getSession();
+            setSession(currentSession);
+            
+            if (currentSession) {
+                await loadHistory();
+            }
+
+            // Escutar mudanças de Auth (Login/Logout)
+            const { data: { subscription } } = realtimeService.onAuthStateChange((newSession) => {
+                setSession(newSession);
+                if (newSession) {
+                    loadHistory();
+                    loadCRMData();
+                } else {
+                    setConversations(MOCK_CONVERSATIONS); // Limpa dados ao sair
+                    setAllContacts([]);
+                    setConnectionStatus('DISCONNECTED');
+                }
+            }) as any;
+
+            return () => subscription?.unsubscribe();
+
+        } catch (error) {
+            console.error("Erro na verificação de auth:", error);
+        } finally {
+            setIsAuthChecking(false);
+        }
     };
 
     const savedConfig = localStorage.getItem(STORAGE_KEY);
+    
+    // Lógica de Inicialização
     if (savedConfig) {
       const parsed = JSON.parse(savedConfig);
       if (parsed.supabaseUrl && parsed.supabaseKey) {
         initSystem(parsed.supabaseUrl, parsed.supabaseKey);
         return;
       }
-    }
-    if (DEFAULT_SUPABASE_CONFIG.supabaseUrl && DEFAULT_SUPABASE_CONFIG.supabaseKey) {
+    } else if (DEFAULT_SUPABASE_CONFIG.supabaseUrl && DEFAULT_SUPABASE_CONFIG.supabaseKey) {
         initSystem(DEFAULT_SUPABASE_CONFIG.supabaseUrl, DEFAULT_SUPABASE_CONFIG.supabaseKey);
     } else {
+        // Sem config, vai para settings e para de carregar auth
+        setIsConfigured(false);
+        setIsAuthChecking(false);
         setCurrentView('settings');
     }
   }, []);
@@ -170,9 +213,15 @@ function App() {
 
   // Realtime Listeners
   useEffect(() => {
-    if (!isConfigured) return;
+    if (!isConfigured || !session) return; // Só conecta se tiver config E sessão
 
     const handleNewRealtimeMessage = (newMessage: Message, phone: string, contactName?: string) => {
+      // 1. Toca som se for mensagem de cliente
+      if (newMessage.senderId === 'customer') {
+          playNotificationSound();
+          document.title = "(1) Nova Mensagem | AutoForce";
+      }
+
       setConversations(prevConversations => {
         const cleanPhone = phone.replace(/\D/g, '');
         const currentActiveId = activeConversationIdRef.current;
@@ -234,27 +283,28 @@ function App() {
         });
     };
 
-    realtimeService.connect(handleNewRealtimeMessage, handleMessageUpdate);
+    const handleConnectionStatus = (status: 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING') => {
+        setConnectionStatus(status);
+    };
+
+    realtimeService.connect(handleNewRealtimeMessage, handleMessageUpdate, handleConnectionStatus);
     return () => realtimeService.disconnect();
-  }, [isConfigured]);
+  }, [isConfigured, session]);
 
   const handleSaveConfig = (newConfig: SystemConfig) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
     setConfig(newConfig);
     setIsConfigured(true);
-    realtimeService.initialize(newConfig.supabaseUrl, newConfig.supabaseKey);
-    loadHistory();
-    loadCRMData();
-    setCurrentView('live-chat');
+    // Reinicializa e tenta carregar auth
+    window.location.reload(); // Recarregar para garantir estado limpo
   };
 
   const handleSendMessage = async (text: string) => {
     if (!activeConversationId) return;
     const activeConv = conversations.find(c => c.id === activeConversationId);
     if (!activeConv) return;
-    if (!isConfigured) {
-        alert("Configure o Supabase primeiro.");
-        setCurrentView('settings');
+    if (!isConfigured || !session) {
+        alert("Sessão expirada ou sistema não configurado.");
         return;
     }
 
@@ -285,18 +335,44 @@ function App() {
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
+  // --- RENDERIZAÇÃO CONDICIONAL (ROTAS) ---
+
+  // 1. Carregando Inicial
+  if (isAuthChecking) {
+      return (
+          <div className="flex h-screen w-full items-center justify-center bg-[#00020A]">
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-af-blue mb-4"></div>
+                <p className="text-gray-400 text-sm">Iniciando Monitor...</p>
+              </div>
+          </div>
+      );
+  }
+
+  // 2. Não Configurado -> Tela de Configurações
+  if (!isConfigured) {
+      return <Settings config={config} onSave={handleSaveConfig} />;
+  }
+
+  // 3. Configurado mas Sem Sessão -> Tela de Login
+  if (!session) {
+      return <Login />;
+  }
+
+  // 4. Configurado e Logado -> APP PRINCIPAL
   return (
     <div className="flex h-screen bg-[#00020A] text-white font-sans overflow-hidden">
-      <Sidebar currentView={currentView} onChangeView={setCurrentView} />
+      <Sidebar currentView={currentView} onChangeView={setCurrentView} connectionStatus={connectionStatus} />
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Passando ALL CONTACTS para o Dashboard para estatísticas reais */}
+        {/* Dashboard */}
         {currentView === 'dashboard' && (
           <div className="w-full h-full">
             <Dashboard conversations={conversations} contacts={allContacts} />
           </div>
         )}
 
+        {/* Configurações (Interna) */}
         {currentView === 'settings' && (
             <div className="w-full"><Settings config={config} onSave={handleSaveConfig} /></div>
         )}
@@ -308,13 +384,14 @@ function App() {
              </div>
         )}
 
-        {/* NOVA VIEW BASE DE LEADS (TABELA) */}
+        {/* BASE DE LEADS (TABELA) */}
         {currentView === 'history' && (
              <div className="w-full h-full">
                 <ContactList contacts={allContacts} />
              </div>
         )}
 
+        {/* CHAT EM TEMPO REAL */}
         {currentView === 'live-chat' && (
           <div className="flex w-full h-full">
             <ConversationList 
@@ -327,7 +404,7 @@ function App() {
                     {isLoadingHistory ? (
                         <div className="h-full flex flex-col items-center justify-center">
                             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-af-blue mb-4"></div>
-                            <p className="text-af-gray-200">Carregando...</p>
+                            <p className="text-af-gray-200">Carregando Histórico...</p>
                         </div>
                     ) : activeConversation ? (
                         <ChatWindow conversation={activeConversation} onSendMessage={handleSendMessage} />
