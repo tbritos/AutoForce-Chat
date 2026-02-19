@@ -30,7 +30,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
     }
   };
 
-  const formatTime = (date: Date) => {
+  const formatTime = (dateValue: Date | string) => {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '--:--';
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
@@ -95,7 +97,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
                 <div className="relative group">
                    <MenuTemplate isAgent={isAgent} />
                    <div className={`flex items-center justify-end mt-1 space-x-1 ${isAgent ? 'text-blue-200' : 'text-gray-400'}`}>
-                      <span className="text-[10px]">{formatTime(new Date(msg.timestamp))}</span>
+                      <span className="text-[10px]">{formatTime(msg.timestamp)}</span>
                       {isAgent && (
                         <span>
                           {msg.status === 'read' ? <CheckCheck size={12} /> : 
@@ -117,7 +119,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                   
                   <div className={`flex items-center justify-end mt-1 space-x-1 ${isAgent ? 'text-blue-200' : 'text-gray-400'}`}>
-                    <span className="text-[10px]">{formatTime(new Date(msg.timestamp))}</span>
+                    <span className="text-[10px]">{formatTime(msg.timestamp)}</span>
                     {isAgent && (
                       <span>
                         {msg.status === 'read' ? <CheckCheck size={12} /> : 

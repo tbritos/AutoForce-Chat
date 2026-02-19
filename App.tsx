@@ -80,13 +80,62 @@ function App() {
   }, [activeConversationId, isConfigured, session]);
 
   // Helper de ordenação
+  const getTimeValue = (dateValue: Date | string | undefined) => {
+      if (!dateValue) return 0;
+      const date = new Date(dateValue);
+      const time = date.getTime();
+      return Number.isNaN(time) ? 0 : time;
+  };
+
+  const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+
   const sortMessages = (msgs: Message[]) => {
       return msgs.sort((a, b) => {
-        const timeA = a.createdAtRaw ? new Date(a.createdAtRaw).getTime() : new Date(a.timestamp).getTime();
-        const timeB = b.createdAtRaw ? new Date(b.createdAtRaw).getTime() : new Date(b.timestamp).getTime();
+        const timeA = a.createdAtRaw ? getTimeValue(a.createdAtRaw) : getTimeValue(a.timestamp);
+        const timeB = b.createdAtRaw ? getTimeValue(b.createdAtRaw) : getTimeValue(b.timestamp);
         if (timeA !== timeB) return timeA - timeB;
         return a.id.localeCompare(b.id, undefined, { numeric: true });
       });
+  };
+
+  const dedupeConversationsByPhone = (list: Conversation[]) => {
+      const sorted = [...list].sort((a, b) => getTimeValue(b.lastMessageTime) - getTimeValue(a.lastMessageTime));
+      const byPhone = new Map<string, Conversation>();
+
+      sorted.forEach((conv) => {
+        const normalizedPhone = normalizePhone(conv.contactPhone);
+        const existing = byPhone.get(normalizedPhone);
+
+        if (!existing) {
+          byPhone.set(normalizedPhone, { ...conv, messages: sortMessages([...conv.messages]) });
+          return;
+        }
+
+        const mergedMessagesMap = new Map<string, Message>();
+        [...existing.messages, ...conv.messages].forEach((message) => {
+          const key = message.id || `${message.senderId}-${message.createdAtRaw || message.timestamp}-${message.text}`;
+          mergedMessagesMap.set(key, message);
+        });
+
+        const mergedMessages = sortMessages(Array.from(mergedMessagesMap.values()));
+        const existingIsGenericName = existing.contactName === formatPhone(existing.contactPhone);
+        const mergedTags = Array.from(new Set([...existing.tags, ...conv.tags]));
+        const existingTime = getTimeValue(existing.lastMessageTime);
+        const convTime = getTimeValue(conv.lastMessageTime);
+        const newest = convTime > existingTime ? conv : existing;
+
+        byPhone.set(normalizedPhone, {
+          ...newest,
+          id: existing.id,
+          contactPhone: existing.contactPhone || conv.contactPhone,
+          contactName: existingIsGenericName && conv.contactName ? conv.contactName : existing.contactName,
+          messages: mergedMessages,
+          unreadCount: Math.max(existing.unreadCount, conv.unreadCount),
+          tags: mergedTags
+        });
+      });
+
+      return Array.from(byPhone.values()).sort((a, b) => getTimeValue(b.lastMessageTime) - getTimeValue(a.lastMessageTime));
   };
 
   // Inicialização do Sistema e Auth
@@ -156,7 +205,7 @@ function App() {
         history.forEach(msg => {
             const phone = msg.phone;
             if (!phone) return;
-            const cleanPhone = phone.replace(/\D/g, '');
+            const cleanPhone = normalizePhone(phone);
 
             const appMsg: Message = {
                 id: msg.id ? String(msg.id) : `temp-${Date.now()}-${Math.random()}`,
@@ -173,7 +222,7 @@ function App() {
 
             if (!conversationsMap.has(cleanPhone)) {
                 conversationsMap.set(cleanPhone, {
-                    id: phone, 
+                    id: cleanPhone, 
                     contactName: displayName,
                     contactPhone: phone,
                     lastMessage: appMsg.text,
@@ -202,9 +251,10 @@ function App() {
             conv.messages = sortMessages(conv.messages);
         });
 
-        const sortedConversations = Array.from(conversationsMap.values()).sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
-        setConversations(sortedConversations);
-        if (sortedConversations.length > 0) setActiveConversationId(sortedConversations[0].id);
+        const sortedConversations = Array.from(conversationsMap.values()).sort((a, b) => getTimeValue(b.lastMessageTime) - getTimeValue(a.lastMessageTime));
+        const dedupedConversations = dedupeConversationsByPhone(sortedConversations);
+        setConversations(dedupedConversations);
+        if (dedupedConversations.length > 0) setActiveConversationId(dedupedConversations[0].id);
     } else {
         setConversations([]); 
     }
@@ -223,11 +273,11 @@ function App() {
       }
 
       setConversations(prevConversations => {
-        const cleanPhone = phone.replace(/\D/g, '');
+        const cleanPhone = normalizePhone(phone);
         const currentActiveId = activeConversationIdRef.current;
         
         const existingConvIndex = prevConversations.findIndex(c => 
-          c.contactPhone.replace(/\D/g, '') === cleanPhone
+          normalizePhone(c.contactPhone) === cleanPhone
         );
 
         if (existingConvIndex >= 0) {
@@ -249,10 +299,10 @@ function App() {
             unreadCount: (targetConv.id === currentActiveId) ? 0 : targetConv.unreadCount + 1,
             status: 'active' as const
           };
-          return updated.sort((a, b) => b.lastMessageTime.getTime() - a.lastMessageTime.getTime());
+          return dedupeConversationsByPhone(updated);
         } else {
           const newConversation: Conversation = {
-            id: phone,
+            id: cleanPhone,
             contactName: contactName || formatPhone(phone), 
             contactPhone: phone,
             lastMessage: newMessage.text,
@@ -263,16 +313,16 @@ function App() {
             tags: ['Novo'],
             messages: [newMessage]
           };
-          return [newConversation, ...prevConversations];
+          return dedupeConversationsByPhone([newConversation, ...prevConversations]);
         }
       });
     };
 
     const handleMessageUpdate = (updatedMessage: Message, phone: string) => {
         setConversations(prevConversations => {
-            const cleanPhone = phone.replace(/\D/g, '');
-            return prevConversations.map(conv => {
-                if (conv.contactPhone.replace(/\D/g, '') === cleanPhone) {
+            const cleanPhone = normalizePhone(phone);
+            const updatedConversations = prevConversations.map(conv => {
+                if (normalizePhone(conv.contactPhone) === cleanPhone) {
                     const updatedMsgs = conv.messages.map(m => 
                         m.id === updatedMessage.id ? updatedMessage : m
                     );
@@ -280,6 +330,7 @@ function App() {
                 }
                 return conv;
             });
+            return dedupeConversationsByPhone(updatedConversations);
         });
     };
 
@@ -291,12 +342,42 @@ function App() {
     return () => realtimeService.disconnect();
   }, [isConfigured, session]);
 
+  useEffect(() => {
+    if (conversations.length === 0) {
+      if (activeConversationId !== null) setActiveConversationId(null);
+      return;
+    }
+
+    if (!activeConversationId) {
+      setActiveConversationId(conversations[0].id);
+      return;
+    }
+
+    const activeStillExists = conversations.some((conv) => conv.id === activeConversationId);
+    if (!activeStillExists) {
+      setActiveConversationId(conversations[0].id);
+    }
+  }, [conversations, activeConversationId]);
+
   const handleSaveConfig = (newConfig: SystemConfig) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
     setConfig(newConfig);
     setIsConfigured(true);
     // Reinicializa e tenta carregar auth
     window.location.reload(); // Recarregar para garantir estado limpo
+  };
+
+  const handleSyncMissingContact = async (phone: string) => {
+    setIsLoadingContact(true);
+    try {
+      const contactData = await realtimeService.fetchContactByPhone(phone);
+      setActiveContact(contactData);
+      await loadCRMData();
+    } catch (error) {
+      console.error("Erro ao sincronizar contato:", error);
+    } finally {
+      setIsLoadingContact(false);
+    }
   };
 
   const handleSendMessage = async (text: string) => {
@@ -314,7 +395,7 @@ function App() {
       id: tempId, text, senderId: 'agent', timestamp: now, createdAtRaw: now.toISOString(), status: 'sent', type: 'text'
     };
 
-    setConversations(prev => prev.map(conv => {
+    setConversations(prev => dedupeConversationsByPhone(prev.map(conv => {
       if (conv.id === activeConversationId) {
         return {
           ...conv,
@@ -324,7 +405,7 @@ function App() {
         };
       }
       return conv;
-    }));
+    })));
 
     try {
         await realtimeService.sendMessage(text, activeConv.contactPhone);
@@ -425,6 +506,7 @@ function App() {
                         isLoading={isLoadingContact} 
                         phone={activeConversation.contactPhone}
                         name={activeConversation.contactName}
+                        onSyncMissingContact={handleSyncMissingContact}
                     />
                 )}
             </div>

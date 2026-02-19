@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Filter, MessageSquare, Phone, Mail } from 'lucide-react';
+import { Search, MessageSquare, Mail } from 'lucide-react';
 import { Conversation } from '../types';
 import { formatPhone } from '../utils';
 
@@ -11,7 +11,7 @@ interface ConversationListProps {
 
 export const ConversationList: React.FC<ConversationListProps> = ({ conversations, activeId, onSelect }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'waiting'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'waiting' | 'finished'>('all');
 
   const filtered = conversations.filter(c => {
     const matchesSearch = c.contactName.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -26,6 +26,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
       case 'instagram': return <MessageSquare size={14} className="text-pink-500" />;
       default: return <Mail size={14} className="text-blue-500" />;
     }
+  };
+
+  const formatSafeTime = (value: Date) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '--:--';
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -65,6 +71,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
             >
                 Fila
             </button>
+            <button 
+                onClick={() => setFilter('finished')}
+                className={`flex-1 text-xs font-bold py-1.5 rounded transition-colors ${filter === 'finished' ? 'bg-af-blue text-white' : 'bg-[#1E2028] text-gray-400 hover:text-white'}`}
+            >
+                Final.
+            </button>
         </div>
       </div>
 
@@ -96,7 +108,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
                   )}
                 </div>
                 <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                  {conv.lastMessageTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  {formatSafeTime(conv.lastMessageTime)}
                 </span>
               </div>
               
