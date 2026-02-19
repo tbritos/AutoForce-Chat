@@ -87,7 +87,12 @@ function App() {
       return Number.isNaN(time) ? 0 : time;
   };
 
-  const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+  const normalizePhone = (phone: string) => {
+      const digits = (phone || '').replace(/\D/g, '');
+      if (!digits) return '';
+      const withoutCountry = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits;
+      return withoutCountry.slice(-11);
+  };
 
   const sortMessages = (msgs: Message[]) => {
       return msgs.sort((a, b) => {
@@ -118,17 +123,19 @@ function App() {
         });
 
         const mergedMessages = sortMessages(Array.from(mergedMessagesMap.values()));
-        const existingIsGenericName = existing.contactName === formatPhone(existing.contactPhone);
         const mergedTags = Array.from(new Set([...existing.tags, ...conv.tags]));
         const existingTime = getTimeValue(existing.lastMessageTime);
         const convTime = getTimeValue(conv.lastMessageTime);
         const newest = convTime > existingTime ? conv : existing;
+        const existingName = (existing.contactName || '').trim();
+        const incomingName = (conv.contactName || '').trim();
+        const mergedName = (convTime >= existingTime && incomingName) ? incomingName : (existingName || incomingName || formatPhone(existing.contactPhone || conv.contactPhone));
 
         byPhone.set(normalizedPhone, {
           ...newest,
           id: existing.id,
           contactPhone: existing.contactPhone || conv.contactPhone,
-          contactName: existingIsGenericName && conv.contactName ? conv.contactName : existing.contactName,
+          contactName: mergedName,
           messages: mergedMessages,
           unreadCount: Math.max(existing.unreadCount, conv.unreadCount),
           tags: mergedTags
@@ -235,8 +242,7 @@ function App() {
                 });
             } else {
                 const currentConv = conversationsMap.get(cleanPhone)!;
-                const isGenericName = currentConv.contactName === formatPhone(currentConv.contactPhone);
-                if (dbName && isGenericName) currentConv.contactName = dbName;
+                if (dbName && dbName.trim()) currentConv.contactName = dbName.trim();
             }
 
             const conv = conversationsMap.get(cleanPhone)!;
@@ -286,8 +292,7 @@ function App() {
           if (targetConv.messages.some(m => m.id === newMessage.id)) return prevConversations;
 
           let newName = targetConv.contactName;
-          const isGenericName = targetConv.contactName === formatPhone(targetConv.contactPhone);
-          if (contactName && isGenericName) newName = contactName;
+          if (contactName && contactName.trim()) newName = contactName.trim();
 
           const newMessagesList = sortMessages([...targetConv.messages, newMessage]);
           updated[existingConvIndex] = {
