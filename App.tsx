@@ -12,7 +12,7 @@ import { Login } from './components/Login';
 import { MOCK_CONVERSATIONS, DEFAULT_SUPABASE_CONFIG } from './constants';
 import { Conversation, ViewState, Message, SystemConfig, Contact } from './types';
 import { realtimeService } from './services/socket';
-import { formatPhone, playNotificationSound } from './utils';
+import { formatPhone, playNotificationSound, resolveMessageText } from './utils';
 
 const STORAGE_KEY = 'autoforce_monitor_config';
 
@@ -216,7 +216,7 @@ function App() {
 
             const appMsg: Message = {
                 id: msg.id ? String(msg.id) : `temp-${Date.now()}-${Math.random()}`,
-                text: msg.content || '',
+                text: resolveMessageText(msg),
                 senderId: msg.direction === 'outbound' ? 'agent' : 'customer',
                 timestamp: new Date(msg.created_at),
                 createdAtRaw: msg.created_at,

@@ -30,6 +30,70 @@ export const formatPhone = (phone: string | undefined | null): string => {
   return phone;
 };
 
+const getFirstString = (obj: any, keys: string[]): string => {
+  for (const key of keys) {
+    const value = obj?.[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+};
+
+const parseJsonIfPossible = (value: string): any | null => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const isGenericTemplateLabel = (value: string): boolean => {
+  const normalized = (value || '').trim().toLowerCase();
+  return normalized === 'template' || normalized === 'templat' || normalized.startsWith('templat ');
+};
+
+const extractTemplateBody = (payload: any): string => {
+  const directBody = getFirstString(payload, ['template_body', 'templateBody', 'body', 'message', 'text']);
+  if (directBody) return directBody;
+
+  const components = Array.isArray(payload?.components) ? payload.components : [];
+  const bodyComponent = components.find((c: any) => String(c?.type || '').toUpperCase() === 'BODY');
+  if (!bodyComponent) return '';
+
+  const componentText = getFirstString(bodyComponent, ['text', 'body']);
+  if (componentText) return componentText;
+
+  const parameters = Array.isArray(bodyComponent?.parameters) ? bodyComponent.parameters : [];
+  const chunks = parameters
+    .map((p: any) => getFirstString(p, ['text', 'value']))
+    .filter(Boolean);
+
+  return chunks.join(' ').trim();
+};
+
+export const resolveMessageText = (dbMsg: any): string => {
+  const rawContent = getFirstString(dbMsg, ['content', 'text', 'message', 'body']);
+  const parsedContent = rawContent ? parseJsonIfPossible(rawContent) : null;
+  const payload = parsedContent && typeof parsedContent === 'object' ? { ...dbMsg, ...parsedContent } : dbMsg;
+
+  const templateName = getFirstString(payload, ['template_name', 'templateName', 'name']);
+  const templateBody = extractTemplateBody(payload);
+
+  if (rawContent && !isGenericTemplateLabel(rawContent)) {
+    return rawContent;
+  }
+
+  if (templateBody) {
+    if (templateName) return `Template: ${templateName}\n${templateBody}`;
+    return templateBody;
+  }
+
+  if (templateName) {
+    return `Template: ${templateName}`;
+  }
+
+  return rawContent || '';
+};
+
 /**
  * Toca um som sutil de notificação para novas mensagens
  */

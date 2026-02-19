@@ -1,6 +1,7 @@
 
 import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
 import { Message, Contact } from '../types';
+import { resolveMessageText } from '../utils';
 
 // Atualizado para aceitar opcionalmente o contactName
 type MessageCallback = (msg: Message, phone: string, contactName?: string) => void;
@@ -240,7 +241,7 @@ class RealtimeService {
           
       return {
         id: dbMsg.id,
-        text: dbMsg.content || '',
+        text: resolveMessageText(dbMsg),
         senderId: senderId,
         timestamp: new Date(dbMsg.created_at),
         createdAtRaw: dbMsg.created_at,
