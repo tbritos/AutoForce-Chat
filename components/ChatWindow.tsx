@@ -1,17 +1,15 @@
 
-import React, { useRef, useEffect, useState } from 'react';
-import { Send, Paperclip, MoreVertical, Smile, Check, CheckCheck } from 'lucide-react';
+import React, { useRef, useEffect } from 'react';
+import { MoreVertical, Check, CheckCheck } from 'lucide-react';
 import { Conversation } from '../types';
 import { formatPhone } from '../utils';
 import { MenuTemplate } from './MessageTemplates';
 
 interface ChatWindowProps {
   conversation: Conversation;
-  onSendMessage: (text: string) => void;
 }
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMessage }) => {
-  const [inputText, setInputText] = useState('');
+export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -21,14 +19,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
   useEffect(() => {
     scrollToBottom();
   }, [conversation.messages]);
-
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inputText.trim()) {
-      onSendMessage(inputText);
-      setInputText('');
-    }
-  };
 
   const formatTime = (dateValue: Date | string) => {
     const date = new Date(dateValue);
@@ -136,40 +126,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation, onSendMess
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 bg-af-black border-t border-gray-800 z-10">
-        <form onSubmit={handleSend} className="flex items-end gap-3 max-w-4xl mx-auto">
-          <button type="button" className="p-3 text-af-gray-200 hover:text-af-blue transition-colors">
-            <Paperclip size={20} />
-          </button>
-          
-          <div className="flex-1 bg-[#1E2028] rounded-xl border border-gray-700 focus-within:border-af-blue focus-within:ring-1 focus-within:ring-af-blue transition-all flex items-center">
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Digite uma mensagem..."
-              className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-gray-500 py-3 px-4"
-            />
-            <button type="button" className="p-3 text-af-gray-200 hover:text-yellow-400 transition-colors">
-              <Smile size={20} />
-            </button>
-          </div>
-
-          <button
-            type="submit"
-            disabled={!inputText.trim()}
-            className="p-3 bg-af-blue hover:bg-af-blue-dark text-white rounded-xl shadow-lg shadow-af-blue/30 transition-all disabled:opacity-50 disabled:shadow-none transform active:scale-95"
-          >
-            <Send size={20} />
-          </button>
-        </form>
-        <div className="text-center mt-2">
-            <span className="text-[10px] text-af-gray-300 uppercase tracking-widest">
-                Powered by AutoForce & n8n
-            </span>
-        </div>
-      </div>
     </div>
   );
 };

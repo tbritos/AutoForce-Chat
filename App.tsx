@@ -380,39 +380,6 @@ function App() {
     }
   };
 
-  const handleSendMessage = async (text: string) => {
-    if (!activeConversationId) return;
-    const activeConv = conversations.find(c => c.id === activeConversationId);
-    if (!activeConv) return;
-    if (!isConfigured || !session) {
-        alert("Sessão expirada ou sistema não configurado.");
-        return;
-    }
-
-    const now = new Date();
-    const tempId = 'temp-' + Date.now();
-    const optimisticMessage: Message = {
-      id: tempId, text, senderId: 'agent', timestamp: now, createdAtRaw: now.toISOString(), status: 'sent', type: 'text'
-    };
-
-    setConversations(prev => dedupeConversationsByPhone(prev.map(conv => {
-      if (conv.id === activeConversationId) {
-        return {
-          ...conv,
-          messages: sortMessages([...conv.messages, optimisticMessage]),
-          lastMessage: text,
-          lastMessageTime: new Date()
-        };
-      }
-      return conv;
-    })));
-
-    try {
-        await realtimeService.sendMessage(text, activeConv.contactPhone);
-    } catch (error) {
-        console.error("Erro ao enviar:", error);
-    }
-  };
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
@@ -488,7 +455,7 @@ function App() {
                             <p className="text-af-gray-200">Carregando Histórico...</p>
                         </div>
                     ) : activeConversation ? (
-                        <ChatWindow conversation={activeConversation} onSendMessage={handleSendMessage} />
+                        <ChatWindow conversation={activeConversation} />
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-af-gray-300">
                             <div className="w-20 h-20 rounded-full bg-af-blue/10 flex items-center justify-center mb-4">

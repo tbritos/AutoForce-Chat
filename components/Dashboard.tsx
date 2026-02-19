@@ -264,7 +264,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ conversations, contacts })
                         <YAxis dataKey="name" type="category" stroke="#8A92B7" width={100} tick={{fill: '#fff', fontSize: 12}} />
                         <Tooltip 
                             cursor={{fill: 'rgba(255,255,255,0.05)'}} 
-                            contentStyle={{ backgroundColor: '#00020A', borderColor: '#4E5265', color: '#fff' }} 
+                            contentStyle={{ backgroundColor: '#00020A', borderColor: '#4E5265', color: '#fff' }}
+                            itemStyle={{ color: '#fff' }}
+                            labelStyle={{ color: '#fff', fontWeight: 700 }}
+                            formatter={(value: number | string) => [value, 'Quantidade']}
                         />
                         <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={30}>
                             {stats.funnelData.map((entry, index) => (
