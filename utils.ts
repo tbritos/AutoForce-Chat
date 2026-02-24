@@ -70,9 +70,11 @@ const stripWrappingQuotes = (value: string): string => {
 
 const normalizeEscapedJson = (value: string): string => {
   return value
-    .replace(/\\\\n/g, '\n')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
     .replace(/\\"/g, '"')
-    .replace(/\\'/g, "'");
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, '\\');
 };
 
 const parseUnknownJson = (input: unknown, depth = 0): any | null => {
@@ -86,7 +88,8 @@ const parseUnknownJson = (input: unknown, depth = 0): any | null => {
     trimmed,
     stripWrappingQuotes(trimmed),
     normalizeEscapedJson(trimmed),
-    normalizeEscapedJson(stripWrappingQuotes(trimmed))
+    normalizeEscapedJson(stripWrappingQuotes(trimmed)),
+    stripWrappingQuotes(normalizeEscapedJson(trimmed))
   ];
 
   for (const candidate of candidates) {
@@ -127,12 +130,50 @@ const getTemplateComponents = (payload: any): any[] => {
   return [];
 };
 
+const decodeTextChunk = (value: string): string => {
+  return normalizeEscapedJson(value).replace(/\\\//g, '/').trim();
+};
+
+const extractByRegexFallback = (text: string): WhatsAppTemplateData | null => {
+  const source = decodeTextChunk(text);
+  if (!source) return null;
+
+  const headerMatch = source.match(/"type"\s*:\s*"HEADER"[\s\S]*?"text"\s*:\s*"([\s\S]*?)"/i);
+  const bodyMatch = source.match(/"type"\s*:\s*"BODY"[\s\S]*?"text"\s*:\s*"([\s\S]*?)"/i);
+  const header = headerMatch ? decodeTextChunk(headerMatch[1]) : '';
+  const body = bodyMatch ? decodeTextChunk(bodyMatch[1]) : '';
+
+  const buttons: WhatsAppTemplateButton[] = [];
+  const buttonRegex = /"type"\s*:\s*"(URL|QUICK_REPLY|PHONE_NUMBER|COPY_CODE|BUTTON)"[\s\S]*?"text"\s*:\s*"([\s\S]*?)"(?:[\s\S]*?"url"\s*:\s*"([\s\S]*?)")?/gi;
+  let match = buttonRegex.exec(source);
+  while (match) {
+    const buttonType = (match[1] || 'BUTTON').toUpperCase();
+    const buttonText = decodeTextChunk(match[2] || '');
+    const buttonUrl = match[3] ? decodeTextChunk(match[3]) : '';
+    if (buttonText) {
+      buttons.push({
+        type: buttonType,
+        text: buttonText,
+        url: buttonUrl || undefined
+      });
+    }
+    match = buttonRegex.exec(source);
+  }
+
+  if (!header && !body && !buttons.length) return null;
+  return {
+    header: header || undefined,
+    body: body || '',
+    buttons
+  };
+};
+
 export const parseWhatsAppTemplateMessage = (text: string): WhatsAppTemplateData | null => {
   if (!text || typeof text !== 'string') return null;
 
   const parsed = parseUnknownJson(text);
   const components = getTemplateComponents(parsed);
-  if (!components.length) return null;
+  if (!components.length) return extractByRegexFallback(text);
 
   let header = '';
   let body = '';
@@ -164,7 +205,7 @@ export const parseWhatsAppTemplateMessage = (text: string): WhatsAppTemplateData
     }
   });
 
-  if (!header && !body && !buttons.length) return null;
+  if (!header && !body && !buttons.length) return extractByRegexFallback(text);
   return {
     header: header || undefined,
     body: body || '',
