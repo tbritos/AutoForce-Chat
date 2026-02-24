@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, MessageSquare, Mail } from 'lucide-react';
 import { Conversation } from '../types';
-import { formatPhone } from '../utils';
+import { formatMessagePreview, formatPhone } from '../utils';
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -14,7 +14,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
   const [filter, setFilter] = useState<'all' | 'active' | 'waiting' | 'finished'>('all');
 
   const filtered = conversations.filter(c => {
-    const matchesSearch = c.contactName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = c.contactName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           c.contactPhone.includes(searchTerm);
     const matchesFilter = filter === 'all' ? true : c.status === filter;
     return matchesSearch && matchesFilter;
@@ -38,40 +38,38 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
     <div className="w-80 border-r border-gray-800 bg-[#0A0C14] flex flex-col h-full">
       <div className="p-4 border-b border-gray-800">
         <h2 className="text-xl font-bold text-white mb-4 font-heading">Atendimentos</h2>
-        
-        {/* Search */}
+
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={16} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome ou telefone..." 
+          <input
+            type="text"
+            placeholder="Buscar por nome ou telefone..."
             className="w-full bg-[#1E2028] border border-gray-700 text-white text-sm rounded-lg pl-9 pr-4 py-2 focus:border-af-blue focus:ring-1 focus:ring-af-blue"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        {/* Filters */}
         <div className="flex gap-2">
-            <button 
+            <button
                 onClick={() => setFilter('all')}
                 className={`flex-1 text-xs font-bold py-1.5 rounded transition-colors ${filter === 'all' ? 'bg-af-blue text-white' : 'bg-[#1E2028] text-gray-400 hover:text-white'}`}
             >
                 Todos
             </button>
-            <button 
+            <button
                 onClick={() => setFilter('active')}
                 className={`flex-1 text-xs font-bold py-1.5 rounded transition-colors ${filter === 'active' ? 'bg-af-blue text-white' : 'bg-[#1E2028] text-gray-400 hover:text-white'}`}
             >
                 Ativos
             </button>
-            <button 
+            <button
                 onClick={() => setFilter('waiting')}
                 className={`flex-1 text-xs font-bold py-1.5 rounded transition-colors ${filter === 'waiting' ? 'bg-af-blue text-white' : 'bg-[#1E2028] text-gray-400 hover:text-white'}`}
             >
                 Fila
             </button>
-            <button 
+            <button
                 onClick={() => setFilter('finished')}
                 className={`flex-1 text-xs font-bold py-1.5 rounded transition-colors ${filter === 'finished' ? 'bg-af-blue text-white' : 'bg-[#1E2028] text-gray-400 hover:text-white'}`}
             >
@@ -82,7 +80,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
 
       <div className="flex-1 overflow-y-auto">
         {filtered.map((conv) => {
-          // Normaliza para comparar apenas números (evita que "+55..." seja diferente de "55...")
           const nameDigits = conv.contactName.replace(/\D/g, '');
           const phoneDigits = conv.contactPhone.replace(/\D/g, '');
           const showSubLabel = nameDigits !== phoneDigits;
@@ -100,7 +97,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
                   <span className={`font-bold text-sm truncate ${activeId === conv.id ? 'text-white' : 'text-af-gray-100 group-hover:text-white'}`}>
                     {conv.contactName}
                   </span>
-                  
+
                   {showSubLabel && (
                     <span className={`text-[10px] font-mono -mt-0.5 ${activeId === conv.id ? 'text-blue-200' : 'text-gray-500'}`}>
                       {formatPhone(conv.contactPhone)}
@@ -111,10 +108,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
                   {formatSafeTime(conv.lastMessageTime)}
                 </span>
               </div>
-              
+
               <p className="text-xs text-gray-400 truncate mb-2 pr-4 mt-1">
-                {conv.messages[conv.messages.length - 1]?.senderId === 'agent' && <span className="text-af-blue mr-1">Você:</span>}
-                {conv.lastMessage}
+                {conv.messages[conv.messages.length - 1]?.senderId === 'agent' && <span className="text-af-blue mr-1">Voc�:</span>}
+                {formatMessagePreview(conv.lastMessage)}
               </p>
 
               <div className="flex items-center justify-between">

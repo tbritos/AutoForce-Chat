@@ -46,6 +46,143 @@ const parseJsonIfPossible = (value: string): any | null => {
   }
 };
 
+export interface WhatsAppTemplateButton {
+  type: string;
+  text: string;
+  url?: string;
+}
+
+export interface WhatsAppTemplateData {
+  header?: string;
+  body: string;
+  buttons: WhatsAppTemplateButton[];
+}
+
+const stripWrappingQuotes = (value: string): string => {
+  if (value.length < 2) return value;
+  const first = value[0];
+  const last = value[value.length - 1];
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    return value.slice(1, -1);
+  }
+  return value;
+};
+
+const normalizeEscapedJson = (value: string): string => {
+  return value
+    .replace(/\\\\n/g, '\n')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'");
+};
+
+const parseUnknownJson = (input: unknown, depth = 0): any | null => {
+  if (depth > 4) return null;
+  if (typeof input !== 'string') return input;
+
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const candidates = [
+    trimmed,
+    stripWrappingQuotes(trimmed),
+    normalizeEscapedJson(trimmed),
+    normalizeEscapedJson(stripWrappingQuotes(trimmed))
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseJsonIfPossible(candidate);
+    if (parsed === null) continue;
+    if (typeof parsed === 'string') return parseUnknownJson(parsed, depth + 1);
+    return parsed;
+  }
+
+  return null;
+};
+
+const getTemplateComponents = (payload: any): any[] => {
+  if (!payload) return [];
+
+  if (Array.isArray(payload)) {
+    const isComponentsArray = payload.every((item) => typeof item === 'object' && item !== null && 'type' in item);
+    if (isComponentsArray) return payload;
+
+    for (const item of payload) {
+      const nested = getTemplateComponents(item);
+      if (nested.length) return nested;
+    }
+    return [];
+  }
+
+  const containers = [payload, payload.template, payload.message, payload.data, payload.payload];
+  for (const container of containers) {
+    if (!container || typeof container !== 'object') continue;
+    if (Array.isArray(container.components)) return container.components;
+    if (typeof container.components === 'string') {
+      const parsed = parseUnknownJson(container.components);
+      const nested = getTemplateComponents(parsed);
+      if (nested.length) return nested;
+    }
+  }
+
+  return [];
+};
+
+export const parseWhatsAppTemplateMessage = (text: string): WhatsAppTemplateData | null => {
+  if (!text || typeof text !== 'string') return null;
+
+  const parsed = parseUnknownJson(text);
+  const components = getTemplateComponents(parsed);
+  if (!components.length) return null;
+
+  let header = '';
+  let body = '';
+  const buttons: WhatsAppTemplateButton[] = [];
+
+  components.forEach((component: any) => {
+    const type = String(component?.type || '').toUpperCase();
+    if (type === 'HEADER') {
+      const headerText = getFirstString(component, ['text', 'header', 'value']);
+      if (headerText) header = headerText;
+    }
+
+    if (type === 'BODY') {
+      const bodyText = getFirstString(component, ['text', 'body', 'value']);
+      if (bodyText) body = bodyText;
+    }
+
+    if (type === 'BUTTONS') {
+      const items = Array.isArray(component?.buttons) ? component.buttons : [];
+      items.forEach((btn: any) => {
+        const buttonText = getFirstString(btn, ['text', 'title', 'value']);
+        if (!buttonText) return;
+        buttons.push({
+          type: String(btn?.type || 'BUTTON').toUpperCase(),
+          text: buttonText,
+          url: getFirstString(btn, ['url', 'link'])
+        });
+      });
+    }
+  });
+
+  if (!header && !body && !buttons.length) return null;
+  return {
+    header: header || undefined,
+    body: body || '',
+    buttons
+  };
+};
+
+export const formatMessagePreview = (text: string): string => {
+  const template = parseWhatsAppTemplateMessage(text);
+  if (!template) return text;
+
+  const bodyLine = (template.body || '').split('\n').find((line) => line.trim())?.trim() || '';
+  if (template.header && bodyLine) return `Template: ${template.header} - ${bodyLine}`;
+  if (template.header) return `Template: ${template.header}`;
+  if (bodyLine) return `Template: ${bodyLine}`;
+  return 'Template WhatsApp';
+};
+
 const isGenericTemplateLabel = (value: string): boolean => {
   const normalized = (value || '').trim().toLowerCase();
   return normalized === 'template' || normalized === 'templat' || normalized.startsWith('templat ');
