@@ -162,10 +162,13 @@ function App() {
             }
 
             // Escutar mudanças de Auth (Login/Logout)
-            const { data: { subscription } } = realtimeService.onAuthStateChange((newSession) => {
+            const { data: { subscription } } = realtimeService.onAuthStateChange((event, newSession) => {
                 setSession(newSession);
                 if (newSession) {
-                    loadHistory();
+                    // Evita sobrescrever a lista em eventos de refresh da sessÃ£o
+                    if (event === 'SIGNED_IN') {
+                        loadHistory();
+                    }
                     loadCRMData();
                 } else {
                     setConversations(MOCK_CONVERSATIONS); // Limpa dados ao sair

@@ -68,10 +68,10 @@ class RealtimeService {
       return data.session;
   }
 
-  public onAuthStateChange(callback: (session: Session | null) => void) {
+  public onAuthStateChange(callback: (event: string, session: Session | null) => void) {
       if (!this.supabase) return;
-      return this.supabase.auth.onAuthStateChange((_event, session) => {
-          callback(session);
+      return this.supabase.auth.onAuthStateChange((event, session) => {
+          callback(event, session);
       });
   }
 
