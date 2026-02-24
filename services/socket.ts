@@ -161,7 +161,7 @@ class RealtimeService {
         const { data, error } = await this.supabase
             .from('messages')
             .select('*')
-            .order('created_at', { ascending: true })
+            .order('created_at', { ascending: false })
             .limit(1000); 
 
         if (error) {
@@ -169,7 +169,7 @@ class RealtimeService {
             return [];
         }
 
-        return data || [];
+        return (data || []).reverse();
     } catch (error) {
         console.error('Erro fatal ao buscar histórico:', error);
         return [];
