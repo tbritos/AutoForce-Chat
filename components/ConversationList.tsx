@@ -111,7 +111,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
 
               <p className="text-xs text-gray-400 truncate mb-2 pr-4 mt-1">
                 {conv.messages[conv.messages.length - 1]?.senderId === 'agent' && <span className="text-af-blue mr-1">Você:</span>}
-                {formatMessagePreview(conv.lastMessage)}
+                {formatMessagePreview(conv.lastMessage, conv.contactName)}
               </p>
 
               <div className="flex items-center justify-between">
@@ -138,3 +138,4 @@ export const ConversationList: React.FC<ConversationListProps> = ({ conversation
     </div>
   );
 };
+

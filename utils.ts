@@ -58,6 +58,8 @@ export interface WhatsAppTemplateData {
   buttons: WhatsAppTemplateButton[];
 }
 
+const TEMPLATE_NAME_PLACEHOLDER_REGEX = /\{\{\s*1\s*\}\}/g;
+
 const stripWrappingQuotes = (value: string): string => {
   if (value.length < 2) return value;
   const first = value[0];
@@ -134,22 +136,37 @@ const decodeTextChunk = (value: string): string => {
   return normalizeEscapedJson(value).replace(/\\\//g, '/').trim();
 };
 
-const extractByRegexFallback = (text: string): WhatsAppTemplateData | null => {
+const sanitizeTemplateText = (value: string, contactName?: string): string => {
+  if (!value) return '';
+
+  let normalized = decodeTextChunk(value);
+
+  // Remove linhas com "\" isolada, comum em payloads JSON serializados com quebra.
+  normalized = normalized.replace(/(^|\n)\s*\\\s*(?=\n|$)/g, '$1');
+
+  if (contactName?.trim()) {
+    normalized = normalized.replace(TEMPLATE_NAME_PLACEHOLDER_REGEX, contactName.trim());
+  }
+
+  return normalized.trim();
+};
+
+const extractByRegexFallback = (text: string, contactName?: string): WhatsAppTemplateData | null => {
   const source = decodeTextChunk(text);
   if (!source) return null;
 
   const headerMatch = source.match(/"type"\s*:\s*"HEADER"[\s\S]*?"text"\s*:\s*"([\s\S]*?)"/i);
   const bodyMatch = source.match(/"type"\s*:\s*"BODY"[\s\S]*?"text"\s*:\s*"([\s\S]*?)"/i);
-  const header = headerMatch ? decodeTextChunk(headerMatch[1]) : '';
-  const body = bodyMatch ? decodeTextChunk(bodyMatch[1]) : '';
+  const header = headerMatch ? sanitizeTemplateText(headerMatch[1], contactName) : '';
+  const body = bodyMatch ? sanitizeTemplateText(bodyMatch[1], contactName) : '';
 
   const buttons: WhatsAppTemplateButton[] = [];
   const buttonRegex = /"type"\s*:\s*"(URL|QUICK_REPLY|PHONE_NUMBER|COPY_CODE|BUTTON)"[\s\S]*?"text"\s*:\s*"([\s\S]*?)"(?:[\s\S]*?"url"\s*:\s*"([\s\S]*?)")?/gi;
   let match = buttonRegex.exec(source);
   while (match) {
     const buttonType = (match[1] || 'BUTTON').toUpperCase();
-    const buttonText = decodeTextChunk(match[2] || '');
-    const buttonUrl = match[3] ? decodeTextChunk(match[3]) : '';
+    const buttonText = sanitizeTemplateText(match[2] || '', contactName);
+    const buttonUrl = match[3] ? sanitizeTemplateText(match[3], contactName) : '';
     if (buttonText) {
       buttons.push({
         type: buttonType,
@@ -168,12 +185,12 @@ const extractByRegexFallback = (text: string): WhatsAppTemplateData | null => {
   };
 };
 
-export const parseWhatsAppTemplateMessage = (text: string): WhatsAppTemplateData | null => {
+export const parseWhatsAppTemplateMessage = (text: string, contactName?: string): WhatsAppTemplateData | null => {
   if (!text || typeof text !== 'string') return null;
 
   const parsed = parseUnknownJson(text);
   const components = getTemplateComponents(parsed);
-  if (!components.length) return extractByRegexFallback(text);
+  if (!components.length) return extractByRegexFallback(text, contactName);
 
   let header = '';
   let body = '';
@@ -205,16 +222,20 @@ export const parseWhatsAppTemplateMessage = (text: string): WhatsAppTemplateData
     }
   });
 
-  if (!header && !body && !buttons.length) return extractByRegexFallback(text);
+  if (!header && !body && !buttons.length) return extractByRegexFallback(text, contactName);
   return {
-    header: header || undefined,
-    body: body || '',
-    buttons
+    header: sanitizeTemplateText(header, contactName) || undefined,
+    body: sanitizeTemplateText(body, contactName),
+    buttons: buttons.map((button) => ({
+      ...button,
+      text: sanitizeTemplateText(button.text, contactName),
+      url: button.url ? sanitizeTemplateText(button.url, contactName) : undefined
+    }))
   };
 };
 
-export const formatMessagePreview = (text: string): string => {
-  const template = parseWhatsAppTemplateMessage(text);
+export const formatMessagePreview = (text: string, contactName?: string): string => {
+  const template = parseWhatsAppTemplateMessage(text, contactName);
   if (!template) return text;
 
   const bodyLine = (template.body || '').split('\n').find((line) => line.trim())?.trim() || '';

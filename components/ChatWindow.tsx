@@ -83,7 +83,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversation }) => {
         {conversation.messages.map((msg) => {
           const isAgent = msg.senderId === 'agent';
           const isMenu = isMenuMessage(msg.text);
-          const templateData = parseWhatsAppTemplateMessage(msg.text);
+          const templateData = parseWhatsAppTemplateMessage(msg.text, safeContactName);
 
           return (
             <div
